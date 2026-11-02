@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# Make the Claude Code SKILL.md files from their .tmpl templates.
+#
+# Usage:
+#   idstack-gen-skills [--dry-run]
+#
+# The script writes skills/<name>/SKILL.md. The Claude Code plugin loader reads
+# this layout.
+# It also writes extension/shared/ste-rules.js from the ste-core block of the
+# preamble, so the Chrome extension carries the same writing rules as the skills.
+#
+# The source file is skills/<name>/SKILL.md.tmpl. It contains the {{PREAMBLE}},
+# {{MANIFEST_SCHEMA}} and {{IDSTACK_RESOLVE}} placeholders. {{IDSTACK_RESOLVE}}
+# puts the canonical $_IDSTACK resolution (templates/snippets/idstack-resolve.sh)
+# into each bash block that uses it. Each block runs in a different shell.
+# Thus each block must contain all of its code. The placeholder is expanded in
+# the preamble too, and the snippet's comment lines are left out of the output.
+
+set -e
+
+IDSTACK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PREAMBLE="$IDSTACK_DIR/templates/preamble.md"
+MANIFEST_SCHEMA="$IDSTACK_DIR/templates/manifest-schema.md"
+RESOLVE_SNIPPET="$IDSTACK_DIR/templates/snippets/idstack-resolve.sh"
+DRY_RUN=0
+GENERATED=0
+ERRORS=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1; shift ;;
+    -h|--help)
+      # Print the header comment block (line 2 through first blank line) as help.
+      # Pattern-based range — robust to header edits.
+      sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) echo "ERROR: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [ ! -f "$PREAMBLE" ]; then
+  echo "ERROR: templates/preamble.md is missing ($PREAMBLE)" >&2
+  exit 1
+fi
+
+if [ ! -f "$MANIFEST_SCHEMA" ]; then
+  echo "ERROR: templates/manifest-schema.md is missing ($MANIFEST_SCHEMA)" >&2
+  exit 1
+fi
+
+if [ ! -f "$RESOLVE_SNIPPET" ]; then
+  echo "ERROR: templates/snippets/idstack-resolve.sh is missing ($RESOLVE_SNIPPET)" >&2
+  exit 1
+fi
+
+# Report assets — skills read these at runtime to write Markdown reports
+# into .idstack/exports/<course-slug>/. report-format.md is the content
+# contract the report-producing skills read alongside the report templates.
+# Missing files would silently break every skill that produces a report, so
+# fail loud here.
+REPORT_MD_TMPL="$IDSTACK_DIR/templates/report.md.tmpl"
+INDEX_MD_TMPL="$IDSTACK_DIR/templates/index.md.tmpl"
+REPORT_FORMAT="$IDSTACK_DIR/templates/report-format.md"
+
+for f in "$REPORT_MD_TMPL" "$INDEX_MD_TMPL" "$REPORT_FORMAT"; do
+  if [ ! -f "$f" ]; then
+    echo "ERROR: the report asset ${f#$IDSTACK_DIR/} is missing" >&2
+    exit 1
+  fi
+done
+
+HEADER="<!-- AUTO-GENERATED from SKILL.md.tmpl -- do not edit directly -->"
+HEADER2="<!-- Edit the .tmpl file instead. Regenerate: bin/idstack-gen-skills -->"
+
+# render_template <tmpl_path> <output_path>
+# Substitutes {{PREAMBLE}}, {{MANIFEST_SCHEMA}}, and {{IDSTACK_RESOLVE}}, and
+# injects the auto-generated header after the frontmatter.
+render_template() {
+  local tmpl="$1"
+  local output="$2"
+  local skill_name
+  skill_name="$(basename "$(dirname "$tmpl")")"
+
+  if ! grep -q '{{PREAMBLE}}' "$tmpl"; then
+    # A template without the placeholder would never be generated or checked —
+    # a silent SKIP here once let --dry-run pass green over an absent output.
+    echo "  ERROR: $skill_name/SKILL.md.tmpl has no {{PREAMBLE}} placeholder" >&2
+    ERRORS=$((ERRORS + 1))
+    return 1
+  fi
+
+  local result
+  result=$(awk -v header="$HEADER" -v header2="$HEADER2" \
+               -v preamble_file="$PREAMBLE" -v schema_file="$MANIFEST_SCHEMA" \
+               -v resolve_file="$RESOLVE_SNIPPET" '
+    # The snippet keeps its comments as documentation; the skills get only the
+    # code. /^#/ and not a [[:space:]] class: mawk on the CI runners has none.
+    function splice_resolve(  line) {
+      while ((getline line < resolve_file) > 0) if (line !~ /^#/) print line
+      close(resolve_file)
+    }
+    function splice_file(f,  line) {
+      while ((getline line < f) > 0) {
+        if (line ~ /\{\{IDSTACK_RESOLVE\}\}/) splice_resolve()
+        else print line
+      }
+      close(f)
+    }
+    BEGIN {
+      frontmatter_count = 0
+    }
+    /^---$/ {
+      frontmatter_count++
+      print
+      if (frontmatter_count == 2) {
+        print header
+        print header2
+        print ""
+      }
+      next
+    }
+    /\{\{PREAMBLE\}\}/ {
+      splice_file(preamble_file)
+      next
+    }
+    /\{\{MANIFEST_SCHEMA\}\}/ {
+      splice_file(schema_file)
+      next
+    }
+    # {{IDSTACK_RESOLVE}} appears many times per template (once per bash block
+    # that calls $_IDSTACK/bin/...); close() resets the read so each occurrence
+    # splices the full snippet.
+    /\{\{IDSTACK_RESOLVE\}\}/ {
+      splice_resolve()
+      next
+    }
+    { print }
+  ' "$tmpl")
+
+  emit_file "$result" "$output"
+}
+
+# emit_file <content> <output_path>
+# Writes the file, or with --dry-run reports whether it is up to date.
+emit_file() {
+  local result="$1"
+  local output="$2"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    if [ -f "$output" ]; then
+      local current
+      current=$(cat "$output")
+      if [ "$result" != "$current" ]; then
+        echo "  STALE: ${output#$IDSTACK_DIR/} (a run without --dry-run updates it)"
+        ERRORS=$((ERRORS + 1))
+      else
+        echo "  OK: ${output#$IDSTACK_DIR/} (up to date)"
+      fi
+    else
+      echo "  MISSING: ${output#$IDSTACK_DIR/} (a run without --dry-run makes it)"
+      ERRORS=$((ERRORS + 1))
+    fi
+  else
+    mkdir -p "$(dirname "$output")"
+    echo "$result" > "$output"
+    echo "  GENERATED: ${output#$IDSTACK_DIR/}"
+  fi
+  return 0
+}
+
+for tmpl in "$IDSTACK_DIR"/skills/*/SKILL.md.tmpl; do
+  [ -f "$tmpl" ] || continue
+  if render_template "$tmpl" "$(dirname "$tmpl")/SKILL.md"; then
+    GENERATED=$((GENERATED + 1))
+  fi
+done
+
+if [ "$GENERATED" -eq 0 ] && [ "$ERRORS" -eq 0 ]; then
+  echo "There are no .tmpl files."
+  exit 1
+fi
+
+# The Chrome extension's model prompts carry the ASD-STE100 rules too. Write
+# them from the text between the ste-core markers, so the preamble stays the
+# only source. Escape what a JS template literal would read: \ ` ${
+STE_JS="$IDSTACK_DIR/extension/shared/ste-rules.js"
+STE_TEXT=$(awk '/<!-- ste-core:end -->/{f=0} f; /<!-- ste-core:begin -->/{f=1}' "$PREAMBLE" \
+  | sed -e 's/\\/\\\\/g' -e 's/`/\\`/g' -e 's/\${/\\${/g')
+if [ -z "$STE_TEXT" ]; then
+  echo "ERROR: templates/preamble.md has no text between the ste-core markers" >&2
+  exit 1
+fi
+emit_file "// AUTO-GENERATED by bin/idstack-gen-skills from the text between the ste-core
+// markers in templates/preamble.md -- do not edit directly. Both model prompts
+// carry it.
+export const STE_RULES = \`$STE_TEXT\`;" "$STE_JS"
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo ""
+  echo "The script examined $GENERATED templates. $ERRORS have problems."
+  if [ "$ERRORS" -gt 0 ]; then exit 1; fi
+else
+  echo ""
+  echo "The script wrote $GENERATED skill files."
+  if [ "$ERRORS" -gt 0 ]; then
+    echo "ERROR: $ERRORS template(s) have errors. The script did not write their SKILL.md files." >&2
+    exit 1
+  fi
+fi

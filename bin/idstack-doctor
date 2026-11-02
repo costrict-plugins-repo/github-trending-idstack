@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# idstack install doctor — diagnose the plugin install.
+#
+# Answers: "is /idstack:<skill> going to work, and if not, exactly what
+# do I run?" without the user having to know about smoke-test.
+#
+# Usage:
+#   idstack-doctor           full diagnosis
+#   idstack-doctor --quick   one code for /idstack:start: OK, PYTHON_MISSING,
+#                            PYTHON_OLD or PYTHON_STUB
+#
+# Exit code: 0 if all green (--quick: OK), 1 if any problem is detected,
+# 2 for an unknown argument.
+
+set -u
+
+# This script lives at <repo>/bin/idstack-doctor — resolve the repo root from
+# its own location so the diagnosis works regardless of where the repo sits.
+IDSTACK_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"
+
+# `claude plugin list` parsing (pinned by test/test-plugin-status.sh).
+. "$IDSTACK_DIR/bin/lib/plugin-status.sh"
+
+PROBLEMS=0
+note_problem() { PROBLEMS=$((PROBLEMS + 1)); }
+
+SKILLS="needs-analysis learning-objectives course-quality-review course-import \
+assessment-design course-builder course-export accessibility-review red-team \
+pipeline learn start"
+
+QUICK=0
+for arg in "$@"; do
+  case "$arg" in
+    --quick) QUICK=1 ;;
+    *) echo "ERROR: unknown argument: $arg" >&2; echo "Command: idstack-doctor [--quick]" >&2; exit 2 ;;
+  esac
+done
+
+# --quick: the one python3 code that /idstack:start reads. A working python3
+# comes first: a python.org install on a Mac has no Command Line Tools, and
+# that is not a problem. Running the macOS stub here is also what opens the
+# "install developer tools" window that /idstack:start tells the user about.
+if [ "$QUICK" = "1" ]; then
+  if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+    echo "OK"
+    exit 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "PYTHON_MISSING"
+  elif [ "$(uname -s 2>/dev/null)" = "Darwin" ] && ! xcode-select -p >/dev/null 2>&1; then
+    echo "PYTHON_STUB"
+  else
+    echo "PYTHON_OLD"
+  fi
+  exit 1
+fi
+
+echo "idstack doctor"
+echo "  repo: $IDSTACK_DIR"
+echo ""
+
+# 0. python3 3.9 or later. The manifest merge, slugify, status, migrate and the
+#    learnings and timeline logs all need it. The checks below fall back to
+#    grep where they can, so that doctor itself still runs without it.
+echo "Requirements:"
+if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+  echo "  found python3 $(python3 -c 'import platform; print(platform.python_version())')"
+else
+  echo "  PROBLEM: idstack needs python3 3.9 or a later version. Install it, then run idstack-doctor again."
+  note_problem
+fi
+echo ""
+
+# 1. Plugin + marketplace manifests in the repo
+echo "Plugin manifests:"
+plugin_manifest="$IDSTACK_DIR/.claude-plugin/plugin.json"
+market_manifest="$IDSTACK_DIR/.claude-plugin/marketplace.json"
+if [ -f "$plugin_manifest" ]; then
+  # Prefer a real JSON parse (also catches a malformed manifest); fall back to
+  # grep|sed only when python3 is unavailable.
+  version=""
+  if command -v python3 >/dev/null 2>&1; then
+    version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("version",""))' "$plugin_manifest" 2>/dev/null || true)
+  else
+    version=$(grep -o '"version": *"[^"]*"' "$plugin_manifest" | head -n1 | sed 's/.*"\([^"]*\)"$/\1/')
+  fi
+  if [ -n "$version" ]; then
+    echo "  found plugin.json (version $version)"
+  else
+    echo "  PROBLEM: could not parse version from $plugin_manifest"
+    note_problem
+  fi
+else
+  echo "  PROBLEM: missing $plugin_manifest"
+  note_problem
+fi
+if [ -f "$market_manifest" ]; then
+  echo "  found marketplace.json"
+else
+  echo "  PROBLEM: missing $market_manifest"
+  echo "  Claude Code installs plugins through a marketplace manifest."
+  echo "  Without this file, ./setup cannot install the plugin."
+  note_problem
+fi
+echo ""
+
+# 2. Skill files reachable in the repo
+echo "Skill files:"
+missing_skills=0
+for skill in $SKILLS; do
+  if [ ! -f "$IDSTACK_DIR/skills/$skill/SKILL.md" ]; then
+    echo "  MISSING: skills/$skill/SKILL.md"
+    missing_skills=$((missing_skills + 1))
+  fi
+done
+if [ "$missing_skills" = "0" ]; then
+  echo "  found all 12 SKILL.md files"
+else
+  echo "  PROBLEM: $missing_skills SKILL.md file(s) missing in skills/"
+  note_problem
+fi
+echo ""
+
+# 3. Claude Code install state — the marketplace flow records the plugin in
+# Claude Code's own registry; a bare symlink is not enough on current versions.
+echo "Claude Code install:"
+if command -v claude >/dev/null 2>&1; then
+  plugin_list=$(claude plugin list 2>/dev/null || true)
+  if echo "$plugin_list" | grep -q "idstack@idstack"; then
+    # Scoped to idstack's own entry — see bin/lib/plugin-status.sh. A fixed
+    # -A4 window read a neighboring plugin's status line and called a disabled
+    # idstack enabled. Pinned by test/test-plugin-status.sh.
+    if echo "$plugin_list" | plugin_is_enabled "idstack@idstack"; then
+      echo "  idstack@idstack is installed and enabled."
+    else
+      echo "  PROBLEM: idstack@idstack is installed but not enabled."
+      echo "  Fix: claude plugin enable idstack@idstack"
+      note_problem
+    fi
+  else
+    echo "  PROBLEM: idstack@idstack is not installed."
+    echo "  Fix: run ./setup from the repo. You can also install idstack manually:"
+    echo "    claude plugin marketplace add \"$IDSTACK_DIR\""
+    echo "    claude plugin install idstack@idstack"
+    note_problem
+  fi
+else
+  echo "  WARNING: 'claude' not found on PATH. Doctor cannot examine the Claude Code install."
+  echo "           Install Claude Code. Then run ./setup from the repo."
+fi
+echo ""
+
+# 4. Final verdict
+if [ "$PROBLEMS" = "0" ]; then
+  echo "OK"
+  exit 0
+else
+  echo "BROKEN ($PROBLEMS problem group(s) above)"
+  exit 1
+fi

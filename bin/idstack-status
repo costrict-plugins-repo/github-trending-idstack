@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+# Course health dashboard. Reads .idstack/timeline.jsonl and prints a summary.
+# Usage: idstack-status
+#        idstack-status --readiness    (pre-export readiness table only)
+#        idstack-status --context      (machine lines for a skill's context recovery)
+# Shows: project name, skills completed, quality score trend, dimensions, next step.
+#
+# --context prints QUALITY_TREND, LAST_PRESENCE, SKILLS_COMPLETED, LAST_SKILL,
+# SUGGESTED_NEXT and LEARNINGS lines, then the top 3 learnings. The preamble's
+# Context Recovery runs it, so the dashboard and every skill read the timeline
+# with the same code.
+#
+# Readiness thresholds (the bar a course must clear to be reported READY):
+#   READY_QUALITY_MIN          = 70   (quality_review.overall_score must be >=)
+#   READY_ACCESS_MIN           = 80   (accessibility_review.score.overall must be >=)
+#   READY_RED_CRITICAL_MAX     = 0    (red_team_audit.findings_summary.critical must be <=)
+#   READY_LEVEL_A_VIOLATIONS_OK = false (any WCAG Level-A violation forces NOT-READY)
+# Tune by editing the constants in the readiness python block below.
+READY_QUALITY_MIN=70
+READY_ACCESS_MIN=80
+READY_RED_CRITICAL_MAX=0
+
+READINESS_ONLY=0
+CONTEXT_ONLY=0
+[ "$1" = "--readiness" ] && READINESS_ONLY=1
+[ "$1" = "--context" ] && CONTEXT_ONLY=1
+
+command -v python3 &>/dev/null || { echo "idstack-status: python3 is necessary" >&2; exit 2; }
+
+TIMELINE=".idstack/timeline.jsonl"
+LEARNINGS=".idstack/learnings.jsonl"
+MANIFEST=".idstack/project.json"
+
+# Project name
+PROJECT_NAME="unknown"
+if [ -f "$MANIFEST" ]; then
+  PROJECT_NAME=$(python3 -c "
+import json
+try:
+    d = json.load(open('$MANIFEST'))
+    print(d.get('project_name', d.get('needs_analysis', {}).get('project_name', 'unknown')))
+except: print('unknown')
+" 2>/dev/null) || PROJECT_NAME="unknown"
+fi
+
+# timeline_summary <dashboard|context> — the one reader of the timeline for
+# the dashboard and for --context. PROJECT_NAME travels via the environment,
+# never interpolated into Python source — a course name containing a quote
+# character must not become a SyntaxError that blanks the dashboard.
+timeline_summary() {
+  MODE="$1" PROJECT_NAME="$PROJECT_NAME" python3 - "$TIMELINE" <<'PY'
+import json, sys, os
+
+mode = os.environ['MODE']
+lines = open(sys.argv[1]).readlines()[-200:]
+events = []
+for line in lines:
+    try:
+        events.append(json.loads(line))
+    except:
+        pass
+
+if not events:
+    if mode == 'dashboard':
+        print('The timeline has no entries that idstack can read.')
+    sys.exit(0)
+
+skills_run = {}
+for e in events:
+    if e.get('event') == 'completed':
+        s = e.get('skill', '?')
+        skills_run[s] = skills_run.get(s, 0) + 1
+completed = set(skills_run.keys())
+
+quality_reviews = [e for e in events if e.get('skill') == 'course-quality-review' and 'score' in e]
+trend = ' -> '.join(str(r['score']) for r in quality_reviews[-5:])
+dims = quality_reviews[-1].get('dimensions', {}) if quality_reviews else {}
+tp = dims.get('teaching_presence', '?')
+sp = dims.get('social_presence', '?')
+cp = dims.get('cognitive_presence', '?')
+
+# Pipeline progression. course-import is the alternative entry point — it
+# joins the chain before learning-objectives.
+pipeline_order = [
+    ('needs-analysis', 'learning-objectives'),
+    ('course-import', 'learning-objectives'),
+    ('learning-objectives', 'assessment-design'),
+    ('assessment-design', 'course-builder'),
+    ('course-builder', 'course-quality-review'),
+    ('course-quality-review', 'accessibility-review'),
+    ('accessibility-review', 'red-team'),
+    ('red-team', 'course-export'),
+]
+next_skill = None
+for prev, nxt in pipeline_order:
+    if prev in completed and nxt not in completed:
+        next_skill = nxt
+        break
+
+if mode == 'context':
+    if quality_reviews:
+        print('QUALITY_TREND: ' + trend)
+        if dims:
+            print('LAST_PRESENCE: T=%s S=%s C=%s' % (tp, sp, cp))
+    # No f-string here: nesting same-type quotes in a replacement field is a
+    # SyntaxError before Python 3.12, and macOS system python3 is 3.9.
+    print('SKILLS_COMPLETED: ' + ','.join(sorted(completed)))
+    last_completed = [e for e in events if e.get('event') == 'completed']
+    if last_completed:
+        last = last_completed[-1]
+        print('LAST_SKILL: %s at %s' % (last.get('skill', '?'), last.get('ts', '?')))
+    if next_skill:
+        print('SUGGESTED_NEXT: ' + next_skill)
+    sys.exit(0)
+
+print('Project: ' + os.environ.get('PROJECT_NAME', 'unknown'))
+print()
+
+print('Skills completed:')
+pipeline = [
+    'needs-analysis', 'learning-objectives', 'assessment-design',
+    'course-import', 'course-builder', 'course-quality-review',
+    'accessibility-review', 'red-team', 'course-export'
+]
+for s in pipeline:
+    count = skills_run.get(s, 0)
+    marker = 'x' if count > 0 else ' '
+    suffix = f' ({count}x)' if count > 1 else ''
+    print(f'  [{marker}] /idstack:{s}{suffix}')
+print()
+
+if quality_reviews:
+    print(f'Quality trend: {trend}')
+    if dims:
+        print(f'Last presence scores: Teaching={tp}/10  Social={sp}/10  Cognitive={cp}/10')
+        cd = dims.get('cross_domain', {})
+        if cd:
+            print('Cross-domain: CogLoad=%s/10  Multimedia=%s/10  Feedback=%s/10' % (
+                cd.get('cognitive_load', '?'), cd.get('multimedia', '?'), cd.get('feedback_quality', '?')))
+    print()
+
+if not next_skill and 'needs-analysis' not in completed and 'course-import' not in completed:
+    next_skill = 'needs-analysis'
+if next_skill:
+    print(f'Recommended next: /idstack:{next_skill}')
+    print()
+PY
+}
+
+# --context: the lines a skill's Context Recovery reads. Silent when there is
+# nothing to recover.
+if [ "$CONTEXT_ONLY" -eq 1 ]; then
+  if [ -f "$TIMELINE" ]; then
+    timeline_summary context 2>/dev/null || true
+  fi
+  if [ -f "$LEARNINGS" ]; then
+    LEARN_COUNT=$(wc -l < "$LEARNINGS" 2>/dev/null | tr -d ' ')
+    echo "LEARNINGS: $LEARN_COUNT"
+    if [ "$LEARN_COUNT" -gt 0 ] 2>/dev/null; then
+      "$(dirname "$0")/idstack-learnings" search --limit 3 2>/dev/null || true
+    fi
+  fi
+  exit 0
+fi
+
+if [ "$READINESS_ONLY" -eq 0 ]; then
+  echo "=============================="
+  echo "  idstack course status"
+  echo "=============================="
+  echo ""
+fi
+
+# Reports — list every per-skill Markdown report present under the course's
+# export folder, plus the index.md dashboard. The dashboard is what the
+# designer reads; the manifest is for the system. A first skill has no
+# timeline until it completes, so the no-timeline branch calls this too: a
+# report that is in progress still shows.
+list_reports() {
+[ -d ".idstack/exports" ] && [ "$READINESS_ONLY" -eq 0 ] || return 0
+  # Find the course folder. Prefer the slug the skills write to (the rule
+  # lives in idstack-slugify --from-manifest); fall back to the only subfolder
+  # if exactly one exists (handles legacy folders left behind after a course
+  # rename).
+  COURSE_DIR=""
+  if [ -x "$(dirname "$0")/idstack-slugify" ]; then
+    _SLUG=$("$(dirname "$0")/idstack-slugify" --from-manifest "$MANIFEST" 2>/dev/null || true)
+    [ -n "$_SLUG" ] && [ -d ".idstack/exports/$_SLUG" ] && COURSE_DIR=".idstack/exports/$_SLUG"
+  fi
+  if [ -z "$COURSE_DIR" ]; then
+    SUBDIR_COUNT=$(find .idstack/exports -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$SUBDIR_COUNT" = "1" ]; then
+      COURSE_DIR=$(find .idstack/exports -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -1)
+    fi
+  fi
+
+  if [ -n "$COURSE_DIR" ]; then
+    REPORT_COUNT=$(find "$COURSE_DIR" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$REPORT_COUNT" -gt 0 ] 2>/dev/null; then
+      echo ""
+      echo "Reports (read these files):"
+      if [ -f "$COURSE_DIR/index.md" ]; then
+        echo "  $COURSE_DIR/index.md  <-- course dashboard, start here"
+      fi
+      for f in "$COURSE_DIR"/*.md; do
+        [ "$f" = "$COURSE_DIR/index.md" ] && continue
+        [ -f "$f" ] || continue
+        # A report that still has the init status line is not finished.
+        if grep -qxF '**Status:** in progress. A section with a draft mark waits for your approval.' "$f" 2>/dev/null; then
+          echo "  $f (in progress)"
+        else
+          echo "  $f"
+        fi
+      done
+      # LMS packages
+      for f in "$COURSE_DIR"/course-export.imscc "$COURSE_DIR"/scorm-export.zip; do
+        [ -f "$f" ] && echo "  $f  <-- LMS package"
+      done
+    fi
+  fi
+}
+
+if [ ! -f "$TIMELINE" ]; then
+  if [ "$READINESS_ONLY" -eq 1 ]; then
+    echo "No timeline data. Run the pipeline skills first."
+  else
+    echo "There is no course data."
+    echo "To start a new course, run /idstack:needs-analysis."
+    echo "To import a course that you have, run /idstack:course-import."
+    list_reports
+  fi
+  exit 0
+fi
+
+if [ "$READINESS_ONLY" -eq 0 ]; then
+  timeline_summary dashboard || echo "Error: idstack cannot read the timeline."
+fi
+
+# Learnings count
+if [ -f "$LEARNINGS" ] && [ "$READINESS_ONLY" -eq 0 ]; then
+  LEARN_COUNT=$(wc -l < "$LEARNINGS" 2>/dev/null | tr -d ' ')
+  [ "$LEARN_COUNT" -gt 0 ] 2>/dev/null && echo "Learnings: $LEARN_COUNT entries"
+fi
+
+list_reports
+
+# Readiness table (shown with --readiness flag or appended to full output)
+if [ "$READINESS_ONLY" -eq 1 ] || [ -f "$MANIFEST" ]; then
+  python3 -c "
+import json, sys, os
+
+manifest_file = '$MANIFEST'
+timeline_file = '$TIMELINE'
+readiness_only = $READINESS_ONLY
+READY_QUALITY_MIN     = $READY_QUALITY_MIN
+READY_ACCESS_MIN      = $READY_ACCESS_MIN
+READY_RED_CRITICAL_MAX = $READY_RED_CRITICAL_MAX
+
+if not os.path.exists(timeline_file):
+    if readiness_only:
+        print('No timeline data. Run the pipeline skills first.')
+    sys.exit(0)
+
+# Read timeline for completed skills
+events = []
+for line in open(timeline_file):
+    try: events.append(json.loads(line))
+    except: pass
+
+completed = set()
+for e in events:
+    if e.get('event') == 'completed':
+        completed.add(e.get('skill', ''))
+
+# Read manifest for scores
+manifest = {}
+if os.path.exists(manifest_file):
+    try: manifest = json.load(open(manifest_file))
+    except: pass
+
+# Build readiness table
+quality_score = manifest.get('quality_review', {}).get('overall_score', 0)
+quality_reviewed = 'course-quality-review' in completed
+red_team = manifest.get('red_team_audit', {})
+red_critical = red_team.get('findings_summary', {}).get('critical', 0)
+red_reviewed = 'red-team' in completed
+access = manifest.get('accessibility_review', {})
+access_score = access.get('score', {}).get('overall', 0)
+access_reviewed = 'accessibility-review' in completed
+# Level-A WCAG violations force NOT-READY regardless of overall score.
+wcag_violations = access.get('wcag_violations', []) or []
+level_a_violations = [v for v in wcag_violations if isinstance(v, dict) and v.get('level') == 'A']
+
+# Per-skill tier: NOT RUN / NEEDS-WORK / READY
+def quality_tier():
+    if not quality_reviewed: return 'NOT RUN'
+    return 'READY' if quality_score >= READY_QUALITY_MIN else 'NEEDS-WORK'
+
+def red_tier():
+    if not red_reviewed: return 'NOT RUN'
+    return 'READY' if red_critical <= READY_RED_CRITICAL_MAX else 'NEEDS-WORK'
+
+def access_tier():
+    if not access_reviewed: return 'NOT RUN'
+    if access_score >= READY_ACCESS_MIN and not level_a_violations:
+        return 'READY'
+    return 'NEEDS-WORK'
+
+if readiness_only:
+    print()
+print('─── Course Readiness ───')
+print()
+q_status = quality_tier()
+r_status = red_tier()
+a_status = access_tier()
+print(f'  Quality Review:       {q_status:<11} Score: {quality_score}/100  (READY threshold: {READY_QUALITY_MIN})')
+print(f'  Red Team Audit:       {r_status:<11} Critical: {red_critical}  (READY threshold: <= {READY_RED_CRITICAL_MAX})')
+a_extra = f'  WCAG Level-A violations: {len(level_a_violations)}' if level_a_violations else ''
+print(f'  Accessibility Review: {a_status:<11} Score: {access_score}/100  (READY threshold: {READY_ACCESS_MIN}{a_extra})')
+print()
+
+# Overall verdict — strict gate. Any unmet condition produces NOT-READY,
+# with itemized reasons. Missing reviews produce INCOMPLETE.
+def verdict():
+    missing = []
+    if not quality_reviewed: missing.append('/idstack:course-quality-review')
+    if not red_reviewed:     missing.append('/idstack:red-team')
+    if not access_reviewed:  missing.append('/idstack:accessibility-review')
+    if missing:
+        return f\"INCOMPLETE (run {', '.join(missing)})\"
+
+    issues = []
+    if quality_score < READY_QUALITY_MIN:
+        issues.append(f'quality score {quality_score} < {READY_QUALITY_MIN}')
+    if red_critical > READY_RED_CRITICAL_MAX:
+        issues.append(f'{red_critical} critical red-team finding(s)')
+    if access_score < READY_ACCESS_MIN:
+        issues.append(f'accessibility score {access_score} < {READY_ACCESS_MIN}')
+    if level_a_violations:
+        issues.append(f'{len(level_a_violations)} WCAG Level-A violation(s)')
+    if not issues:
+        return 'READY TO EXPORT'
+    return f\"NOT-READY ({', '.join(issues)})\"
+
+print(f'  Verdict: {verdict()}')
+print()
+" || echo "  (Error: idstack cannot calculate the readiness.)"
+fi

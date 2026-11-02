@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -e
+
+# Resolve the *physical* path, so the marketplace registers the clone itself
+# and not a symlink to it.
+IDSTACK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+
+# Default install: user-scope plugin so /idstack:<skill> is discovered.
+CLAUDE_SCOPE="user"  # claude plugin scope: user (global) or project (--local)
+
+for arg in "$@"; do
+  case "$arg" in
+    --local) CLAUDE_SCOPE="project" ;;
+    -h|--help)
+      echo "Command: ./setup [--local]"
+      echo "  --local  Installs idstack at project scope (./.claude/), not at user scope."
+      exit 0
+      ;;
+    *) echo "ERROR: unknown argument: $arg" >&2; echo "Run ./setup --help for more information." >&2; exit 2 ;;
+  esac
+done
+
+# Regenerate skill files so installs are always fresh against the current .tmpl
+# source. Cheap (<1s); the source-of-truth invariant is worth more than the cost.
+"$IDSTACK_DIR/bin/idstack-gen-skills" >/dev/null
+echo "  regenerated skill files"
+
+echo "Setup installs idstack (scope: $CLAUDE_SCOPE)..."
+echo "  source: $IDSTACK_DIR"
+echo ""
+
+# Verify plugin + marketplace manifests are present (sanity check; setup should
+# not silently install something Claude Code can't discover).
+if [ ! -f "$IDSTACK_DIR/.claude-plugin/plugin.json" ]; then
+  echo "ERROR: missing .claude-plugin/plugin.json at $IDSTACK_DIR" >&2
+  echo "       A plugin layout must have this file. Setup stopped." >&2
+  exit 1
+fi
+if [ ! -f "$IDSTACK_DIR/.claude-plugin/marketplace.json" ]; then
+  echo "ERROR: missing .claude-plugin/marketplace.json at $IDSTACK_DIR" >&2
+  echo "       Claude Code installs plugins through a marketplace manifest. Setup stopped." >&2
+  exit 1
+fi
+
+# Claude Code install — register this repo as a single-plugin marketplace, then
+# install from it. Both commands are idempotent, so re-running setup is safe.
+# The marketplace source is this repo's path; `marketplace update` re-reads it,
+# and `plugin update` picks up a newer committed version on `git pull && ./setup`.
+if command -v claude >/dev/null 2>&1; then
+  # The two required calls fail loud with a manual-recovery hint — under
+  # `set -e` a bare nonzero exit here used to abort setup silently, with no
+  # message at all.
+  if ! claude plugin marketplace add "$IDSTACK_DIR"; then
+    echo "" >&2
+    echo "ERROR: The 'claude plugin marketplace add' command stopped with an error." >&2
+    echo "Run this command manually. Then run ./setup again:" >&2
+    echo "    claude plugin marketplace add \"$IDSTACK_DIR\"" >&2
+    exit 1
+  fi
+  claude plugin marketplace update idstack >/dev/null 2>&1 || true
+  if ! claude plugin install idstack@idstack --scope "$CLAUDE_SCOPE"; then
+    echo "" >&2
+    echo "ERROR: The 'claude plugin install' command stopped with an error." >&2
+    echo "Install idstack manually:" >&2
+    echo "    claude plugin install idstack@idstack --scope $CLAUDE_SCOPE" >&2
+    exit 1
+  fi
+  claude plugin update idstack@idstack --scope "$CLAUDE_SCOPE" >/dev/null 2>&1 || true
+  echo ""
+  echo "Setup installed idstack in Claude Code (scope: $CLAUDE_SCOPE)."
+else
+  echo "  WARNING: 'claude' not found on PATH. Setup did not install idstack in Claude Code."
+  echo "  Install Claude Code. Then run ./setup again. You can also install idstack manually:"
+  echo "    claude plugin marketplace add \"$IDSTACK_DIR\""
+  echo "    claude plugin install idstack@idstack --scope $CLAUDE_SCOPE"
+fi
+
+echo ""
+echo "  If Claude Code is open, close it and open it again."
+echo "  Claude Code reads plugins only when a session starts."
+echo ""
+echo "  To use a skill, run /idstack:<skill>"
+echo ""
+echo "  If you do not know where to start:"
+echo "    /idstack:start"
+echo ""
+echo "  If you have a course, import it and examine it:"
+echo "    /idstack:course-import -> /idstack:course-quality-review"
+echo ""
+echo "  To start a new course:"
+echo "    /idstack:needs-analysis"
+echo ""
+echo "  Run the full pipeline:"
+echo "    /idstack:pipeline"
+echo ""
+echo "  All skills: start, needs-analysis, learning-objectives, assessment-design,"
+echo "    course-builder, course-quality-review, accessibility-review,"
+echo "    red-team, course-export, course-import, pipeline, learn"
+echo ""
+echo "  More information: https://idstack.org"

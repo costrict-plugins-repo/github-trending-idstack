@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>AI instructional design tool, backed by research | idstack</title>
+  <meta name="description" content="AI instructional design tool for ADDIE, backward design or SAM. It cites studies with an evidence tier. Open source. Runs in Claude Code and Chrome.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://idstack.org/">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="512x512" href="favicon.png">
+  <link rel="apple-touch-icon" href="favicon.png">
+  <link rel="alternate" type="application/rss+xml" title="idstack releases" href="https://github.com/savvides/idstack/releases.atom">
+
+  <!-- Font URL: DESIGN.md, Typography. smoke-test checks that the two agree. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="AI instructional design tool, backed by research | idstack">
+  <meta property="og:description" content="idstack is an open-source AI instructional design tool. It helps you apply ADDIE, backward design or SAM. It supports each recommendation with peer-reviewed studies. It runs in Claude Code and Chrome.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://idstack.org/">
+  <meta property="og:site_name" content="idstack">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://idstack.org/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="An AI copilot for instructional design.">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AI instructional design tool, backed by research | idstack">
+  <meta name="twitter:description" content="AI instructional design tool: your framework (ADDIE, backward design or SAM), peer-reviewed studies, and an evidence tier on every recommendation. Open source.">
+  <meta name="twitter:image" content="https://idstack.org/og-image.png">
+  <meta name="twitter:image:alt" content="An AI copilot for instructional design.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "idstack",
+    "description": "idstack is an open-source AI instructional design tool. It helps you do each job of course design in ADDIE, backward design or SAM. It supports every recommendation with peer-reviewed research across 11 domains. It runs in Claude Code and Chrome.",
+    "url": "https://idstack.org",
+    "applicationCategory": "EducationalApplication",
+    "operatingSystem": "macOS, Linux, Windows (WSL or Git Bash)",
+    "softwareVersion": "3.11.1.0",
+    "datePublished": "2026-03-30",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "license": "https://opensource.org/licenses/MIT",
+    "codeRepository": "https://github.com/savvides/idstack",
+    "author": {
+      "@type": "Person",
+      "name": "Philippos Savvides",
+      "url": "https://github.com/savvides"
+    }
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    img, svg {
+      max-width: 100%;
+      height: auto;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    :root {
+      /* The "Proof" tokens (from the retired report stylesheet), plus the
+         landing's prussian hero. See DESIGN.md § Color and § Landing page. */
+      --bg:           #faf8f3;
+      --raised:       #ffffff;
+      --ink:          #1a1815;
+      --ink-soft:     #3a352e;
+      --ink-muted:    #6b6358;
+      --rule:         #e6e0d2;
+      --rule-strong:  #d4cdb9;
+      --accent:       #7a1f1f;
+      --accent-blue:  #1d4a5e;
+      --accent-soft:  #f4eae8;
+      --on-accent:    #faf8f3;
+
+      --hero-bg:      #163a4a;
+      --hero-ink:     #faf8f3;
+      --hero-soft:    #dfe6e8;
+      --hero-panel:   #0f2c39;
+      --hero-rule:    #2b5263;
+
+      --tier-1: #2f7a4a;
+      --tier-2: #2864a8;
+      --tier-3: #a87726;
+      --tier-4: #b35a1f;
+      --tier-5: #6b6b6b;
+
+      --severity-warning-bg: #fbf0d9;
+      --severity-warning-fg: #7a4f0c;
+      --severity-critical-bg: #f5dcd5;
+      --severity-critical-fg: #8c2515;
+      --severity-info-bg:    #e7eaf1;
+      --severity-info-fg:    #344566;
+
+      --font-display: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --font-body:    'Source Serif 4', 'Source Serif Pro', 'Charter', 'Iowan Old Style', 'Sitka Text', Georgia, serif;
+      --font-ui:      'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --font-mono:    'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+
+      --max:    1120px;
+      --prose:  62ch;
+      --pad-x:  clamp(1rem, 3.5vw, 2rem);
+      --pad-y:  clamp(2.75rem, 5.5vw, 5.5rem);
+
+      /* Minimum interactive target. 44px is the Apple HIG / WCAG 2.5.5 figure; the page
+         previously carried three different ad-hoc floors (36/40/42px). */
+      --tap-min: 44px;
+    }
+
+    /* Dark mode follows the reader's system setting, with the retired report stylesheet's dark
+       tokens. No toggle: the light theme is canonical, dark is a courtesy. */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:           #16140f;
+        --raised:       #1f1d18;
+        --ink:          #ebe7dd;
+        --ink-soft:     #cfc9bc;
+        --ink-muted:    #968f80;
+        --rule:         #2c2a23;
+        --rule-strong:  #3d3a30;
+        --accent:       #d97461;
+        --accent-blue:  #6aa6e3;
+        --accent-soft:  #2a1d1a;
+        --on-accent:    #16140f;
+
+        --hero-bg:      #10232c;
+        --hero-panel:   #0b1a21;
+        --hero-rule:    #24414e;
+
+        --tier-1: #5fc185;
+        --tier-2: #6aa6e3;
+        --tier-3: #d6a64c;
+        --tier-4: #e58f53;
+        --tier-5: #a3a3a3;
+
+        --severity-warning-bg: #2e2210;
+        --severity-warning-fg: #e3b25c;
+        --severity-critical-bg: #2e1612;
+        --severity-critical-fg: #e89786;
+        --severity-info-bg:    #1a2030;
+        --severity-info-fg:    #9bafd2;
+      }
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 1.0625rem;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; }
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.18em;
+    }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: 2px;
+    }
+
+    code, pre, .mono {
+      font-family: var(--font-mono);
+      font-size: 0.95em;
+    }
+
+    code {
+      background: var(--raised);
+      border: 1px solid var(--rule);
+      padding: 0.08em 0.35em;
+      border-radius: 2px;
+      font-size: max(0.85em, 0.75rem);
+    }
+
+    h1, h2, h3 {
+      font-family: var(--font-display);
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+    }
+
+    /* ──────────────────────────────────────────────
+       Topbar — prussian, continuous with the hero
+       ────────────────────────────────────────────── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--hero-bg);
+      border-bottom: 1px solid var(--hero-rule);
+    }
+    .topbar a:focus-visible { outline-color: var(--hero-ink); }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-block: 0.85rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .brand {
+      font-family: var(--font-display);
+      font-size: clamp(1.2rem, 3vw, 1.35rem);
+      font-weight: 700;
+      color: var(--hero-ink);
+      text-decoration: none;
+      letter-spacing: -0.01em;
+      display: inline-flex;
+      align-items: baseline;
+      flex-shrink: 0;
+    }
+    .brand:hover { text-decoration: none; }
+    .brand-beta {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--hero-soft);
+      margin-left: 0.35rem;
+      vertical-align: super;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: clamp(0.75rem, 2.5vw, 1.5rem);
+      flex-wrap: wrap;
+    }
+    .nav-links a {
+      color: var(--hero-soft);
+      font-family: var(--font-ui);
+      text-decoration: none;
+      font-size: clamp(0.82rem, 1.8vw, 0.93rem);
+      padding: 0.25rem 0;
+      transition: color 0.1s cubic-bezier(0.2, 0, 0, 1);
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--hero-ink); text-decoration: underline; }
+
+    @media (max-width: 480px) {
+      .nav { padding-top: 0.65rem; padding-bottom: 0.65rem; gap: 0.6rem; }
+      .nav-links { gap: 0.85rem; }
+    }
+
+    /* ──────────────────────────────────────────────
+       Layout primitives
+       ────────────────────────────────────────────── */
+    /* Page containers share the max-width, centering, and notch-safe inline gutter.
+       Defining the gutter once means a new container cannot miss it — .section did,
+       so every content region sat under the notch once viewport-fit=cover landed. */
+    .nav, .section, .hero, .footer {
+      max-width: var(--max);
+      margin-inline: auto;
+      padding-inline:
+        max(var(--pad-x), env(safe-area-inset-left))
+        max(var(--pad-x), env(safe-area-inset-right));
+    }
+    .section {
+      padding-block: var(--pad-y);
+    }
+    .section + .section { border-top: 1px solid var(--rule); }
+
+    .section-header { margin-bottom: 2.5rem; }
+    .section-header h2 {
+      font-size: clamp(1.6rem, 3vw, 2.1rem);
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+    .section-header .lede {
+      font-size: 1.05rem;
+      color: var(--ink-soft);
+      max-width: var(--prose);
+    }
+
+    /* ──────────────────────────────────────────────
+       Hero — prussian band: the claim, then a real session
+       ────────────────────────────────────────────── */
+    .hero-band {
+      background: var(--hero-bg);
+      color: var(--hero-ink);
+    }
+    .hero {
+      padding-block: clamp(2.5rem, 6vw, 5rem) clamp(2.5rem, 5vw, 4.5rem);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: clamp(2rem, 4vw, 3rem);
+      align-items: start;
+    }
+    @media (min-width: 1024px) {
+      .hero { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.3rem);
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.06;
+      margin-bottom: 1.25rem;
+      text-wrap: balance;
+      overflow-wrap: break-word;
+      max-width: 18ch;
+      color: var(--hero-ink);
+    }
+    .hero .lede {
+      font-size: clamp(1rem, 1.6vw, 1.15rem);
+      color: var(--hero-soft);
+      line-height: 1.6;
+      max-width: var(--prose);
+      margin-bottom: 1.75rem;
+    }
+    .hero a { color: var(--hero-ink); }
+    .hero a:focus-visible { outline-color: var(--hero-ink); }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.45rem 0.65rem;
+      font-family: var(--font-ui);
+      font-size: 0.8rem;
+      letter-spacing: 0.02em;
+      color: var(--hero-soft);
+      margin-top: 1.5rem;
+    }
+    .hero-meta .dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--hero-soft);
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .install-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: var(--hero-panel);
+      border: 1px solid var(--hero-rule);
+      border-radius: 2px;
+      padding: 0.5rem 0.55rem 0.5rem 0.8rem;
+      width: 100%;
+      max-width: 640px;
+      overflow: hidden;
+    }
+    .install-pill .prompt {
+      color: var(--hero-soft);
+      font-family: var(--font-mono);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .install-pill code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: var(--hero-ink);
+      font-size: 0.83rem;
+      flex: 1 1 0;
+      min-width: 0;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: thin;
+    }
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--rule-strong);
+      border-radius: 2px;
+      padding: 0.4rem 0.75rem;
+      min-height: var(--tap-min);
+      color: var(--ink-soft);
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 0.78rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: border-color 0.1s cubic-bezier(0.2, 0, 0, 1), color 0.1s cubic-bezier(0.2, 0, 0, 1);
+    }
+    .copy-btn:hover { color: var(--ink); border-color: var(--ink-muted); }
+    .copy-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .copy-btn[data-copied="true"] { color: var(--tier-1); border-color: var(--tier-1); }
+    .install-pill .copy-btn { color: var(--hero-soft); border-color: var(--hero-rule); }
+    .install-pill .copy-btn:hover { color: var(--hero-ink); border-color: var(--hero-soft); }
+    .install-pill .copy-btn:focus-visible { outline-color: var(--hero-ink); }
+    .install-pill .copy-btn[data-copied="true"] { color: var(--hero-ink); border-color: var(--hero-ink); }
+
+    .cta-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      align-items: stretch;
+      max-width: 640px;
+    }
+    .cta-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    /* One solid color per surface: oxblood on ivory, ivory on the prussian hero. */
+    .btn-chrome {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.55rem;
+      background: var(--accent);
+      color: var(--on-accent);
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.6rem 1.1rem;
+      min-height: var(--tap-min);
+      border-radius: 2px;
+      text-decoration: none;
+      transition: background 0.1s cubic-bezier(0.2, 0, 0, 1);
+      flex-shrink: 0;
+    }
+    .btn-chrome:hover {
+      background: color-mix(in srgb, var(--accent) 86%, var(--ink));
+      color: var(--on-accent);
+      text-decoration: none;
+    }
+    .btn-chrome:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .hero .btn-chrome { background: var(--hero-ink); color: var(--hero-bg); }
+    .hero .btn-chrome:hover { background: var(--hero-soft); color: var(--hero-bg); }
+    .hero .btn-chrome:focus-visible { outline-color: var(--hero-ink); }
+    .btn-chrome .btn-badge {
+      font-size: 0.75rem;
+      border: 1px solid currentColor;
+      padding: 0.05rem 0.4rem;
+      border-radius: 2px;
+      font-weight: 500;
+    }
+    .cta-or {
+      font-size: 0.85rem;
+      color: var(--hero-soft);
+      font-family: var(--font-ui);
+    }
+    .cta-secondary {
+      font-family: var(--font-ui);
+      font-size: 0.92rem;
+      text-decoration: none;
+      align-self: flex-start;
+      padding: 0.2rem 0;
+    }
+    .hero .cta-secondary { color: var(--hero-soft); }
+    .hero .cta-secondary:hover { color: var(--hero-ink); text-decoration: underline; }
+    .cta-tap { display: inline-flex; align-items: center; min-height: var(--tap-min); }
+    /* The topbar is sticky (93px at 375px), so a jump to the card must stop below it. */
+    #install-desktop { scroll-margin-top: 6rem; }
+
+    @media (max-width: 480px) {
+      .cta-actions { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+      .btn-chrome { width: 100%; }
+      .cta-or { text-align: center; }
+    }
+
+    /* The session replay (closes #131): a static transcript that ends in a cited finding. */
+    .session {
+      background: var(--hero-panel);
+      border: 1px solid var(--hero-rule);
+      border-radius: 2px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      line-height: 1.65;
+      color: var(--hero-soft);
+      min-width: 0;
+    }
+    .session-head {
+      padding: 0.55rem 0.9rem;
+      border-bottom: 1px solid var(--hero-rule);
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .session-body { padding: 0.9rem; }
+    .session-line { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0.5rem; }
+    .session-line + .session-line { margin-top: 0.35rem; }
+    .session-who { color: var(--hero-soft); opacity: 1; }
+    .session-you .session-said { color: var(--hero-ink); }
+    /* The base code box is light; on the dark session panel it hid the text. */
+    .session-said code { background: transparent; border-color: var(--hero-rule); }
+    .session-finding {
+      margin-top: 0.9rem;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 0.95rem 1rem;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      line-height: 1.55;
+    }
+    .session-finding .finding-tags { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.5rem; }
+    .session-finding .finding-title {
+      font-family: var(--font-display);
+      font-size: 1.02rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 0.35rem;
+    }
+    .session-finding p + p { margin-top: 0.45rem; }
+    .session-finding .finding-label {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-right: 0.35rem;
+    }
+    .session-finding code { font-size: 0.8em; }
+    .session-more { margin-top: 0.75rem; }
+
+    /* Tier + severity pills: outlined tier chips. */
+    .tier {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 0.18em 0.5em;
+      border-radius: 2px;
+      border: 1px solid currentColor;
+      line-height: 1;
+    }
+    .tier-1 { color: var(--tier-1); }
+    .tier-2 { color: var(--tier-2); }
+    .tier-3 { color: var(--tier-3); }
+    .tier-4 { color: var(--tier-4); }
+    .tier-5 { color: var(--tier-5); }
+    /* On prussian the outlined chip is too dark to read, so the hero fills it instead. */
+    .hero .lede .tier { color: #ffffff; border-color: transparent; }
+    .hero .lede .tier-1 { background: #2f7a4a; }
+    .hero .lede .tier-5 { background: #6b6b6b; }
+
+    .cite-pill {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--accent-blue);
+      white-space: nowrap;
+    }
+
+    .severity {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.18em 0.55em;
+      border-radius: 2px;
+      line-height: 1;
+    }
+    .severity-warning { background: var(--severity-warning-bg); color: var(--severity-warning-fg); }
+    .severity-critical { background: var(--severity-critical-bg); color: var(--severity-critical-fg); }
+    .severity-info { background: var(--severity-info-bg); color: var(--severity-info-fg); }
+
+    /* ──────────────────────────────────────────────
+       Evidence — tier legend + ranked domain index
+       ────────────────────────────────────────────── */
+    .evidence-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem clamp(1rem, 3vw, 1.75rem);
+      margin-bottom: 1.5rem;
+      font-family: var(--font-ui);
+      font-size: 0.88rem;
+      color: var(--ink-soft);
+    }
+    .evidence-legend-item {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+    .evidence-legend-item strong {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: 0.02em;
+    }
+    .evidence-legend-dot {
+      display: inline-block;
+      width: 0.7rem;
+      height: 0.7rem;
+      transform: translateY(1px);
+      flex-shrink: 0;
+    }
+    .evidence-legend-dot.t1 { background: var(--tier-1); }
+    .evidence-legend-dot.t2 { background: var(--tier-2); }
+    .evidence-legend-dot.t3 { background: var(--tier-3); }
+    .evidence-legend-dot.t4 { background: var(--tier-4); }
+    .evidence-legend-dot.t5 { background: var(--tier-5); }
+
+    /* One row per domain, ranked by study count. The bar width scales to the study
+       count (the largest domain = full width); each segment is that domain's count at one tier. */
+    .evidence-index { list-style: none; border-top: 1px solid var(--rule-strong); }
+    .evidence-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 15rem);
+      grid-template-areas: "title bar" "body body";
+      gap: 0.2rem 1rem;
+      align-items: center;
+      padding: 0.95rem 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .evidence-row-title {
+      grid-area: title;
+      font-size: 1.02rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .tier-mix { grid-area: bar; display: flex; height: 0.75rem; }
+    .tier-mix span { display: block; height: 100%; flex: none; }
+    .tier-mix .t1 { background: var(--tier-1); }
+    .tier-mix .t2 { background: var(--tier-2); }
+    .tier-mix .t3 { background: var(--tier-3); }
+    .tier-mix .t4 { background: var(--tier-4); }
+    .tier-mix .t5 { background: var(--tier-5); }
+    .evidence-row-body {
+      grid-area: body;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      color: var(--ink-soft);
+      max-width: var(--prose);
+      margin-top: 0.2rem;
+    }
+    .evidence-row-tiers {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--ink-muted);
+      margin-left: 0.35rem;
+      white-space: nowrap;
+    }
+    @media (max-width: 640px) {
+      .evidence-row {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "title" "bar" "body";
+        gap: 0.45rem 0.75rem;
+      }
+    }
+
+    .evidence-foot {
+      margin-top: 2rem;
+      font-size: 0.92rem;
+      color: var(--ink-muted);
+      max-width: var(--prose);
+    }
+
+    /* ──────────────────────────────────────────────
+       Pipeline
+       ────────────────────────────────────────────── */
+    .pipeline-canvas {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .pipeline-track-label {
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    .pipeline-track-label .track-mono {
+      font-family: var(--font-mono);
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--accent);
+    }
+
+    .pipeline-flow {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 0.6rem;
+      counter-reset: step;
+    }
+    @media (max-width: 1080px) {
+      .pipeline-flow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .pipeline-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 480px) {
+      .pipeline-flow { grid-template-columns: 1fr; }
+    }
+
+    .pipeline-node {
+      counter-increment: step;
+      position: relative;
+      background: var(--raised);
+      border: 1px solid var(--rule);
+      border-radius: 0;
+      padding: 0.85rem 0.85rem 0.85rem 0.85rem;
+      cursor: default;
+      transition: border-color 0.1s cubic-bezier(0.2, 0, 0, 1);
+    }
+    .pipeline-node:hover,
+    .pipeline-node:focus-within {
+      border-color: var(--accent-blue);
+    }
+    .pipeline-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .pipeline-node .node-num {
+      position: absolute;
+      top: 0.6rem;
+      right: 0.6rem;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--ink-muted);
+    }
+    .pipeline-node .node-num::before { content: counter(step); }
+    .pipeline-node .node-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--accent-blue);
+      margin-bottom: 0.3rem;
+      word-break: break-word;
+      padding-right: 1.5rem;
+    }
+    .pipeline-node .node-desc {
+      font-family: var(--font-ui);
+      font-size: 0.78rem;
+      color: var(--ink-muted);
+      line-height: 1.4;
+    }
+
+    .pipeline-aside-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem 2rem;
+      padding-top: 1.25rem;
+      border-top: 1px dashed var(--rule);
+      font-size: 0.88rem;
+      color: var(--ink-muted);
+    }
+    .pipeline-aside {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+    }
+    .pipeline-aside .aside-tag {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--accent);
+      border: 1px solid var(--rule);
+      padding: 0.18em 0.5em;
+      border-radius: 2px;
+      background: var(--raised);
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+
+    /* ──────────────────────────────────────────────
+       Why (one designer / a design team)
+       ────────────────────────────────────────────── */
+    .why-pair {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 2.5rem clamp(2rem, 5vw, 4rem);
+    }
+    @media (max-width: 760px) {
+      .why-pair { grid-template-columns: minmax(0, 1fr); }
+    }
+    .why-col h3 {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      font-weight: 700;
+      padding-bottom: 0.7rem;
+      border-bottom: 2px solid var(--ink);
+    }
+    .why-list > div {
+      padding-block: 1rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .why-list dt {
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--ink);
+    }
+    .why-list dd {
+      margin: 0.2rem 0 0;
+      font-size: 0.98rem;
+      line-height: 1.55;
+      color: var(--ink-soft);
+    }
+    .why-foot {
+      margin-top: 1.75rem;
+      font-family: var(--font-ui);
+      font-size: 0.92rem;
+      color: var(--ink-muted);
+    }
+
+    /* ──────────────────────────────────────────────
+       Framework switch: the same eight skills, with the phase names of
+       the selected framework. Radio inputs + :has(), no script. Without
+       :has() the ADDIE names show (the default rules below).
+       ────────────────────────────────────────────── */
+    .fw-switch {
+      border: 0;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-ui);
+    }
+    .fw-switch legend {
+      float: left;
+      padding: 0;
+      margin-right: 0.5rem;
+      font-size: 0.95rem;
+      color: var(--ink-soft);
+      line-height: var(--tap-min);
+    }
+    .fw-switch label {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--tap-min);
+      padding: 0 1.1rem;
+      border: 1px solid var(--rule-strong);
+      background: var(--raised);
+      color: var(--ink);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .fw-switch input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+    .fw-switch label:has(input:checked) {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: var(--on-accent);
+    }
+    .fw-switch label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .fw-notes p {
+      max-width: var(--prose);
+      font-size: 0.98rem;
+      color: var(--ink-soft);
+    }
+    .fw-notes [data-fw], .node-phase [data-fw], .aside-phase [data-fw] { display: none; }
+    .fw-notes [data-fw="addie"], .node-phase [data-fw="addie"], .aside-phase [data-fw="addie"] { display: block; }
+    .pipeline-canvas:has(#fw-ubd:checked) [data-fw="addie"],
+    .pipeline-canvas:has(#fw-sam:checked) [data-fw="addie"] { display: none; }
+    .pipeline-canvas:has(#fw-ubd:checked) [data-fw="ubd"],
+    .pipeline-canvas:has(#fw-sam:checked) [data-fw="sam"] { display: block; }
+
+    .node-phase {
+      display: block;
+      margin: -0.85rem -0.85rem 0.7rem;
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1.3;
+      color: var(--on-accent);
+    }
+    .node-phase [data-fw] { padding: 0.35rem 0.85rem; }
+    .node-phase .g-a { background: var(--accent-blue); }
+    .node-phase .g-b { background: var(--accent); }
+    /* The step number sits in the phase strip, so the skill name has the full width. */
+    .pipeline-node { padding-inline: 0.7rem; }
+    .node-phase { margin-inline: -0.7rem; }
+    .node-phase [data-fw] { padding-inline: 0.7rem 1.6rem; min-height: calc(2.6em + 0.7rem); }
+    .pipeline-node .node-num { top: 0.35rem; right: 0.6rem; color: var(--on-accent); font-weight: 700; line-height: 1.3; }
+    /* -0.02em keeps the 14-character names on one line in the 8-column row at 12px. */
+    .pipeline-node .node-label { padding-right: 0; font-size: 0.75rem; letter-spacing: -0.02em; word-break: normal; overflow-wrap: anywhere; }
+    .pipeline-node .node-desc { display: block; }
+    @media (max-width: 480px) {
+      .pipeline-aside { flex-wrap: wrap; }
+    }
+    .aside-phase {
+      display: inline-block;
+      margin-left: 0.5em;
+      padding-left: 0.5em;
+      border-left: 1px solid var(--rule-strong);
+      font-family: var(--font-ui);
+      color: var(--ink-muted);
+    }
+
+    .pipeline-foot {
+      margin-top: 1.75rem;
+      font-size: 0.95rem;
+      color: var(--ink-soft);
+      max-width: var(--prose);
+    }
+
+    /* ──────────────────────────────────────────────
+       Output pair (markdown / json)
+       ────────────────────────────────────────────── */
+    /* minmax(0, …) rather than a bare 1fr: a grid item's automatic minimum size is its
+       min-content width, so a long unbreakable code string would otherwise widen the track. */
+    .output-pair {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    @media (max-width: 880px) {
+      .output-pair { grid-template-columns: minmax(0, 1fr); }
+    }
+    .output-panel {
+      background: var(--raised);
+      border: 1px solid var(--rule);
+      border-radius: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .output-header {
+      padding: 0.55rem 0.85rem;
+      border-bottom: 1px solid var(--rule);
+      background: color-mix(in srgb, var(--bg) 50%, transparent);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--ink-muted);
+      letter-spacing: 0.02em;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .output-body {
+      padding: clamp(0.9rem, 2.5vw, 1.25rem);
+      font-size: 0.92rem;
+      line-height: 1.6;
+      color: var(--ink-soft);
+    }
+    .output-body h3 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: -0.005em;
+      color: var(--ink);
+      margin-bottom: 0.85rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+    }
+    .output-body p { margin-bottom: 0.7rem; }
+    .output-body p:last-child { margin-bottom: 0; }
+    .output-body strong { color: var(--ink); font-weight: 600; }
+    .output-json {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      line-height: 1.55;
+      white-space: pre;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      color: var(--ink-soft);
+      padding: clamp(0.9rem, 2.5vw, 1.25rem);
+    }
+    .output-json .key   { color: var(--accent); }
+    .output-json .str   { color: var(--tier-2); }
+    .output-json .punct { color: var(--ink-muted); }
+    .output-foot {
+      margin-top: 1.5rem;
+      font-size: 0.92rem;
+      color: var(--ink-muted);
+      max-width: var(--prose);
+    }
+
+    /* ──────────────────────────────────────────────
+       FAQ: hairline rows, as in the Why list
+       ────────────────────────────────────────────── */
+    .faq-list { max-width: var(--prose); }
+    .faq-list > div {
+      padding-block: 1rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .faq-list h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .faq-list p {
+      margin-top: 0.35rem;
+      color: var(--ink-soft);
+    }
+
+    /* ──────────────────────────────────────────────
+       Install
+       ────────────────────────────────────────────── */
+    .install-tracks {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1.5rem;
+      max-width: 760px;
+    }
+    .install-track-card {
+      background: var(--raised);
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: clamp(1rem, 3.5vw, 1.75rem);
+    }
+    .install-track-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.85rem;
+    }
+    .install-track-header h3 {
+      font-family: var(--font-display);
+      font-size: clamp(1.05rem, 2.5vw, 1.18rem);
+      font-weight: 600;
+      margin: 0;
+    }
+    .track-badge {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.03em;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 0.15rem 0.5rem;
+      border-radius: 2px;
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+      white-space: nowrap;
+    }
+    .install-track-card .btn-chrome {
+      margin-top: 1rem;
+    }
+
+    .install-block {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: var(--raised);
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: 0.65rem 0.65rem 0.65rem 0.95rem;
+      max-width: 760px;
+      width: 100%;
+    }
+    .install-block .prompt {
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .install-block code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: var(--ink);
+      font-size: clamp(0.78rem, 1.8vw, 0.88rem);
+      flex: 1 1 0;
+      min-width: 0;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: thin;
+    }
+
+    .install-prose {
+      font-size: 0.95rem;
+      color: var(--ink-soft);
+      max-width: var(--prose);
+      margin-top: 0.85rem;
+    }
+
+    /* ──────────────────────────────────────────────
+       Footer
+       ────────────────────────────────────────────── */
+    .footer {
+      padding-block: 2.5rem max(3rem, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--rule);
+      font-size: 0.88rem;
+    }
+    .footer-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1.5rem 2rem;
+      align-items: start;
+    }
+    @media (max-width: 720px) {
+      .footer-top { grid-template-columns: 1fr; gap: 1.25rem; }
+    }
+    .footer-brand {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      color: var(--ink-soft);
+      margin-bottom: 0.4rem;
+    }
+    .footer-brand strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .footer-tag {
+      color: var(--ink-muted);
+      font-size: 0.82rem;
+    }
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.25rem;
+    }
+    .footer-links a {
+      color: var(--ink-soft);
+      text-decoration: none;
+      padding: 0.2rem 0;
+    }
+    .footer-links a:hover { color: var(--ink); text-decoration: underline; }
+
+    .footer-signup {
+      margin-top: 1.75rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      max-width: 460px;
+      gap: 0;
+    }
+    @media (max-width: 480px) {
+      .footer-signup { flex-direction: column; gap: 0.5rem; }
+      .footer-signup input[type="email"] { border-right: 1px solid var(--rule); border-radius: 2px; }
+      .footer-signup button { border-radius: 2px; width: 100%; }
+    }
+    .footer-signup label {
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+    .footer-signup input[type="email"] {
+      flex: 1;
+      min-height: var(--tap-min);
+      padding: 0.55rem 0.85rem;
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      background: var(--raised);
+      color: var(--ink);
+      border: 1px solid var(--rule);
+      border-right: none;
+      border-radius: 2px 0 0 2px;
+      outline: none;
+    }
+    .footer-signup input[type="email"]:focus { border-color: var(--accent); }
+    .footer-signup input[type="email"]::placeholder { color: var(--ink-muted); }
+    .footer-signup button {
+      min-height: var(--tap-min);
+      padding: 0.55rem 1rem;
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--on-accent);
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 0 2px 2px 0;
+      cursor: pointer;
+    }
+    .footer-signup button:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+    .footer-signup button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .signup-note {
+      margin-top: 0.55rem;
+      font-size: 0.82rem;
+      color: var(--ink-muted);
+      min-height: 1.2em;
+    }
+    .signup-note.success { color: var(--tier-1); }
+    .signup-note.error   { color: var(--severity-critical-fg); }
+
+    /* Skip link */
+    .skip-link {
+      position: absolute;
+      left: 0.5rem;
+      top: 0.5rem;
+      background: var(--ink);
+      color: var(--bg);
+      padding: 0.4rem 0.8rem;
+      border-radius: 2px;
+      font-size: 0.85rem;
+      transform: translateY(-200%);
+      transition: transform 0.15s;
+      z-index: 100;
+      text-decoration: none;
+    }
+    .skip-link:focus { transform: translateY(0); outline: 2px solid var(--accent); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar" role="banner">
+    <nav class="nav" aria-label="Primary">
+      <a class="brand" href="/">idstack<sup class="brand-beta">beta</sup></a>
+      <div class="nav-links">
+        <a href="#why">Why</a>
+        <a href="#install">Install</a>
+        <a href="#pipeline">Frameworks</a>
+        <a href="#evidence">Evidence</a>
+        <a href="https://github.com/savvides/idstack" rel="noopener">GitHub&nbsp;↗</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+
+    <!-- ────────── Hero ────────── -->
+    <div class="hero-band">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-text">
+        <h1 id="hero-title">An AI copilot for instructional design.</h1>
+        <p class="lede">idstack helps you do each job of an instructional designer, in ADDIE, backward design or SAM. Each recommendation cites its study and shows how strong the evidence is.</p>
+
+        <div class="cta-row">
+          <div class="cta-actions">
+            <a class="btn-chrome" href="https://chromewebstore.google.com/detail/eclnhfehloplcnidkkopphamllnlhinm" target="_blank" rel="noopener">
+              <svg class="chrome-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                <circle cx="12" cy="12" r="4" fill="currentColor"/>
+                <path d="M12 2a10 10 0 0 1 8.66 5H12" stroke="currentColor" stroke-width="2"/>
+                <path d="M20.66 7A10 10 0 0 1 12 22l4.33-7.5" stroke="currentColor" stroke-width="2"/>
+                <path d="M12 22A10 10 0 0 1 3.34 7L12 12" stroke="currentColor" stroke-width="2"/>
+              </svg>
+              <span>Add to Chrome</span>
+              <span class="btn-badge">Free</span>
+            </a>
+            <span class="cta-or">or in Claude Code:</span>
+          </div>
+          <div class="install-pill" role="group" aria-label="Install command">
+            <span class="prompt" aria-hidden="true">$</span>
+            <code id="install-cmd">git clone https://github.com/savvides/idstack.git &amp;&amp; cd idstack &amp;&amp; ./setup</code>
+            <button class="copy-btn" type="button" data-copy-target="install-cmd" aria-label="Copy install command">Copy</button>
+          </div>
+          <a class="cta-secondary cta-tap" href="#install-desktop">No terminal? Use the Claude desktop app</a>
+          <a class="cta-secondary" href="#evidence">→&nbsp; See the studies</a>
+          <a class="cta-secondary" href="#pipeline">→&nbsp; Find your ADDIE or backward design phase</a>
+        </div>
+
+        <p class="hero-meta">
+          <span>Open source</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>MIT</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>v3.11.1.0 · Claude Code &amp; Chrome</span>
+        </p>
+      </div>
+
+      <figure class="session" aria-label="Sample session: importing a Canvas course">
+        <figcaption class="session-head">Claude Code · sample session</figcaption>
+        <div class="session-body">
+          <p class="session-line session-you"><span class="session-who">you</span><span class="session-said">/idstack:course-import</span></p>
+          <p class="session-line"><span class="session-who">idstack</span><span class="session-said">How do you want to import your course? LMS or SCORM package file · PDF or Word file · Paste course documents · Canvas API</span></p>
+          <p class="session-line session-you"><span class="session-who">you</span><span class="session-said">Canvas API. Here is my Canvas URL and course ID.</span></p>
+          <p class="session-line"><span class="session-who">idstack</span><span class="session-said">Paste your access token into <code>.idstack/canvas.env</code>, not into the chat. Then tell me when it is done.</span></p>
+          <p class="session-line"><span class="session-who">idstack</span><span class="session-said">Connected. Found 12 modules, 8 assignments, 4 discussions, 6 outcomes. Import quality triage: 4 flags (4 warning). The most important: all 8 assessments are auto-graded quizzes with no rubrics. Read the draft in <code>.idstack/exports/bio-101/course-import.md</code>.</span></p>
+          <p class="session-line session-more"><span class="session-who"></span><span class="session-said">In the report:</span></p>
+
+          <div class="session-finding">
+            <p class="finding-tags"><span class="severity severity-warning">warning</span> <span class="tier tier-1">T1</span></p>
+            <p class="finding-title">All 8 assessments are auto-graded quizzes with no rubrics</p>
+            <p><span class="finding-label">Justification</span>Elaborated feedback produces larger learning gains than correctness-only feedback. <span class="cite-pill">[Assessment-8] [T1]</span></p>
+          </div>
+
+          <p class="session-line session-more"><span class="session-who"></span><span class="session-said">+ 3 more flags in the report, for example: only 4 of 12 modules state learning objectives.</span></p>
+        </div>
+      </figure>
+    </section>
+    </div>
+
+    <!-- ────────── Why ────────── -->
+    <section class="section" id="why" aria-labelledby="why-title">
+      <header class="section-header">
+        <h2 id="why-title">AI help for each instructional design job</h2>
+        <p class="lede">You are the designer, and idstack is the copilot. It does the first draft, the review and the search for the research. Each skill does the work of one phase of your framework. You make each decision.</p>
+      </header>
+
+      <div class="why-pair">
+        <div class="why-col">
+          <h3>For one designer</h3>
+          <dl class="why-list">
+            <div><dt>A second opinion in one minute</dt><dd>Paste an objective, a quiz question, a rubric or a slide. You get findings, each with its study, and a corrected version.</dd></div>
+            <div><dt>A first draft to start from</dt><dd>Objectives with Bloom's levels, rubrics, question banks, storyboards and module pages. You approve, change or remove each row.</dd></div>
+            <div><dt>An answer to "why?"</dt><dd>When a subject matter expert disagrees, you show the study and how strong its evidence is.</dd></div>
+            <div><dt>A full course audit in one afternoon</dt><dd>Import a course from your LMS. You get a quality score, an accessibility score and a list of what to correct first.</dd></div>
+          </dl>
+        </div>
+        <div class="why-col">
+          <h3>For a design team</h3>
+          <dl class="why-list">
+            <div><dt>One standard of review</dt><dd>Each course is examined against the same standards: Quality Matters, WCAG and constructive alignment.</dd></div>
+            <div><dt>Reports that you can send</dt><dd>Each skill writes a plain Markdown report for faculty, clients and curriculum committees. Each finding has its evidence tier.</dd></div>
+            <div><dt>Design decisions stay with the course</dt><dd>The needs, the objectives and the alignment are saved in the course folder. A different designer continues where the first one stopped.</dd></div>
+            <div><dt>New designers learn the reasons</dt><dd>idstack explains each step and each term to a new designer, and it is brief with an expert.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <p class="why-foot">Free and open source. idstack keeps the course files in a folder on your computer.</p>
+    </section>
+
+    <!-- ────────── Install ────────── -->
+    <section class="section" id="install" aria-labelledby="install-title">
+      <header class="section-header">
+        <h2 id="install-title">Three ways to install idstack</h2>
+      </header>
+
+      <div class="install-tracks">
+        <div class="install-track-card">
+          <div class="install-track-header">
+            <h3>Chrome extension</h3>
+            <span class="track-badge">In-browser (Canvas / Docs)</span>
+          </div>
+          <p class="install-prose">Audit Canvas modules and assignments, Google Docs syllabi and web course pages in the Chrome side panel. You do not need a command line.</p>
+          <a class="btn-chrome" href="https://chromewebstore.google.com/detail/eclnhfehloplcnidkkopphamllnlhinm" target="_blank" rel="noopener">
+            <svg class="chrome-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+              <circle cx="12" cy="12" r="4" fill="currentColor"/>
+              <path d="M12 2a10 10 0 0 1 8.66 5H12" stroke="currentColor" stroke-width="2"/>
+              <path d="M20.66 7A10 10 0 0 1 12 22l4.33-7.5" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 22A10 10 0 0 1 3.34 7L12 12" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <span>Install from Chrome Web Store</span>
+            <span class="btn-badge">Free</span>
+          </a>
+        </div>
+
+        <div class="install-track-card" id="install-desktop">
+          <div class="install-track-header">
+            <h3>Claude desktop app</h3>
+            <span class="track-badge">No terminal</span>
+          </div>
+          <p class="install-prose">In the Code tab of the Claude desktop app, select a folder for your course. Then paste this line in the message box:</p>
+          <div class="install-block" role="group" aria-label="Desktop install command">
+            <span class="prompt" aria-hidden="true">›</span>
+            <code id="install-cmd-3">/plugin marketplace add savvides/idstack</code>
+            <button class="copy-btn" type="button" data-copy-target="install-cmd-3" aria-label="Copy desktop install command">Copy</button>
+          </div>
+          <p class="install-prose">Click <strong>+</strong>, then <strong>Add plugins</strong>, and install idstack. Then start a new session and select the course folder again, because Claude Code loads a plugin only when a session starts. Type <code>/idstack:start</code>. Each skill that writes a report gives you a link to open it in the app.</p>
+        </div>
+
+        <div class="install-track-card">
+          <div class="install-track-header">
+            <h3>Claude Code plugin</h3>
+            <span class="track-badge">All skills</span>
+          </div>
+          <div class="install-block" role="group" aria-label="Install command">
+            <span class="prompt" aria-hidden="true">$</span>
+            <code id="install-cmd-2">git clone https://github.com/savvides/idstack.git &amp;&amp; cd idstack &amp;&amp; ./setup</code>
+            <button class="copy-btn" type="button" data-copy-target="install-cmd-2" aria-label="Copy install command">Copy</button>
+          </div>
+
+          <p class="install-prose"><code>./setup</code> registers idstack with Claude Code and installs the skills. Re-run it after a <code>git pull</code> to update.</p>
+
+          <p class="install-prose">You need a bash shell (Terminal on macOS or Linux, WSL or Git Bash on Windows). <code>./setup</code> does not run in PowerShell or <code>cmd</code>. You also need Python 3.9 or later, because the skills save their results with it. <code>scripts/idstack-doctor</code> checks for it.</p>
+
+          <p class="install-prose">To check the install, run <code>scripts/idstack-doctor</code>. To see the health of a course, run <code>scripts/idstack-status</code>.</p>
+
+          <p class="install-prose">New to Claude Code? <a href="https://claude.ai/code" rel="noopener">Install the Claude Code command-line tool</a> first, then paste the command above in a terminal. In the Claude desktop app, use the steps in the Claude desktop app card. When Claude Code starts, run <code>/idstack:start</code>.</p>
+
+          <p class="install-prose">Not using Claude Code? The idstack skills run in Claude Code. Use the Chrome extension, or fork the repo and adapt the skills for a different agent, for example Codex or Antigravity. idstack does not support or test those forks.</p> <!-- IDSTACK_CLI_LEAK_ALLOW: unsupported-fork pointer, not a support claim -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ────────── Pipeline ────────── -->
+    <section class="section" id="pipeline" aria-labelledby="pipeline-title">
+      <header class="section-header">
+        <h2 id="pipeline-title">AI course design skills for ADDIE, backward design and SAM</h2>
+        <p class="lede">The pipeline skills run in sequence through <code>/idstack:pipeline</code>. Other skills handle first-run setup, course import and course memory. Companion skills work at any time: feedback on one item, a storyboard, a question bank and an evaluation plan. You can run any skill alone, with no manifest.</p>
+      </header>
+
+      <div class="pipeline-canvas">
+        <fieldset class="fw-switch">
+          <legend>Show the phases of</legend>
+          <label><input type="radio" name="fw" id="fw-addie" checked> ADDIE</label>
+          <label><input type="radio" name="fw" id="fw-ubd"> Backward design</label>
+          <label><input type="radio" name="fw" id="fw-sam"> SAM</label>
+        </fieldset>
+        <div class="fw-notes">
+          <p data-fw="addie">ADDIE evaluates two times. The three review skills are the formative evaluation, before the launch. <code>/idstack:evaluation-plan</code> plans the summative evaluation, after it.</p>
+          <p data-fw="ubd">Results first, then the evidence, then the lessons. The pipeline uses this sequence, so <code>/idstack:course-builder</code> writes no lesson before the objectives and the assessments are there.</p>
+          <p data-fw="sam">Each skill can run again, and the course folder keeps your decisions. Storyboard one module as the prototype, review it with <code>/idstack:quick-check</code>, and start the next cycle.</p>
+        </div>
+        <p class="pipeline-track-label">Sequence (left to right) under <span class="track-mono">/idstack:pipeline</span></p>
+        <ol class="pipeline-flow" role="list">
+          <li class="pipeline-node" tabindex="0">
+            <span class="node-phase"><span data-fw="addie" class="g-a">Analyze</span><span data-fw="ubd" class="g-a">Stage 1: results</span><span data-fw="sam" class="g-a">Preparation</span></span>
+            <span class="node-num" aria-hidden="true"></span>
+            <span class="node-label">needs-analysis</span>
+            <span class="node-desc">Three-level needs assessment and training-decision gate. Skipped after a course import.</span>
+          </li>
+          <li class="pipeline-node" tabindex="0">
+            <span class="node-phase"><span data-fw="addie" class="g-b">Design</span><span data-fw="ubd" class="g-a">Stage 1: results</span><span data-fw="sam" class="g-b">Iterative design</span></span>
+            <span class="node-num" aria-hidden="true"></span>
+            <span class="node-label">learning-objectives</span>
+            <span class="node-desc">Bloom's classification and bidirectional alignment.</span>
+          </li>
+          <li class="pipeline-node" tabindex="0">
+            <span class="node-phase"><span data-fw="addie" class="g-b">Design</span><span data-fw="ubd" class="g-b">Stage 2: evidence</span><span data-fw="sam" class="g-b">Iterative design</span></span>
+            <span class="node-num" aria-hidden="true"></span>
+            <span class="node-label">assessment-design</span>
+            <span class="node-desc">Rubrics, checkpoints and feedback principles.</span>
+          </li>
+          <li class="pipeline-node" tabindex="0">
+            <span class="node-phase"><span data-fw="addie" class="g-a">Develop</span><span data-fw="ubd" class="g-a">Stage 3: lessons</span><span data-fw="sam" class="g-a">Iterative development</span></span>
+            <span class="node-num" aria-hidden="true"></span>
+            <span class="node-label">course-builder</span>
+            <span class="node-desc">Cognitive-load-aware content generation.</span>
+          </li>
+          <li class="pipeline-node" tabindex="0">
+            <span class="node-phase"><span data-fw="addie" class="g-b">Evaluate</span><span data-fw="ubd" class="g-b">Alignment check</span><span data-fw="sam" class="g-a">Iterative development</span></span>
+            <span class="node-num" aria-hidden="true"></span>
+            <span class="node-label">course-quality-review</span>
+            <span class="node-desc">Quality Matters + Community of Inquiry.</span>
+          </li>
+          <li class="pipeline-node" tabindex="0">
+            <span class="node-phase"><span data-fw="addie" class="g-b">Evaluate</span><span data-fw="ubd" class="g-b">Alignment check</span><span data-fw="sam" class="g-a">Iterative development</span></span>
+            <span class="node-num" aria-hidden="true"></span>
+            <span class="node-label">accessibility-review</span>
+            <span class="node-desc">WCAG + UDL audit.</span>
+          </li>
+          <li class="pipeline-node" tabindex="0">
+            <span class="node-phase"><span data-fw="addie" class="g-b">Evaluate</span><span data-fw="ubd" class="g-b">Alignment check</span><span data-fw="sam" class="g-a">Iterative development</span></span>
+            <span class="node-num" aria-hidden="true"></span>
+            <span class="node-label">red-team</span>
+            <span class="node-desc">Adversarial audit before launch.</span>
+          </li>
+          <li class="pipeline-node" tabindex="0">
+            <span class="node-phase"><span data-fw="addie" class="g-a">Implement</span><span data-fw="ubd" class="g-a">Publish</span><span data-fw="sam" class="g-a">Iterative development</span></span>
+            <span class="node-num" aria-hidden="true"></span>
+            <span class="node-label">course-export</span>
+            <span class="node-desc">Common Cartridge, SCORM, or Canvas API.</span>
+          </li>
+        </ol>
+
+        <div class="pipeline-aside-row" aria-label="Skills outside the linear pipeline">
+          <div class="pipeline-aside">
+            <span class="aside-tag">start</span>
+            <span>Checks that idstack can run in a course folder, then starts the correct skill. The first skill to run.</span>
+          </div>
+          <div class="pipeline-aside">
+            <span class="aside-tag">course-import<span class="aside-phase"><span data-fw="addie">Analyze</span><span data-fw="ubd">Stage 1: results</span><span data-fw="sam">Preparation</span></span></span>
+            <span>Extracts existing modules, assignments, and syllabi from an IMSCC or SCORM package, a PDF or Word file, pasted documents, or the Canvas API.</span>
+          </div>
+          <div class="pipeline-aside">
+            <span class="aside-tag">learn</span>
+            <span>Searches, deletes, promotes, and exports the learnings that skills save, in this course and across courses.</span>
+          </div>
+        </div>
+
+        <p class="pipeline-track-label">Companion skills, at any time</p>
+        <div class="pipeline-aside-row" aria-label="Companion skills that run at any time">
+          <div class="pipeline-aside">
+            <span class="aside-tag">quick-check<span class="aside-phase"><span data-fw="addie">Each phase</span><span data-fw="ubd">Each stage</span><span data-fw="sam">Each review</span></span></span>
+            <span>Feedback on one objective, quiz question, rubric, slide or page in one minute. You get cited findings and a corrected version. It needs no setup.</span>
+          </div>
+          <div class="pipeline-aside">
+            <span class="aside-tag">storyboard<span class="aside-phase"><span data-fw="addie">Develop</span><span data-fw="ubd">Stage 3: lessons</span><span data-fw="sam">Iterative design</span></span></span>
+            <span>Script and screens for a video, an e-learning module or slides, checked against the multimedia learning principles.</span>
+          </div>
+          <div class="pipeline-aside">
+            <span class="aside-tag">question-bank<span class="aside-phase"><span data-fw="addie">Develop</span><span data-fw="ubd">Stage 2: evidence</span><span data-fw="sam">Iterative development</span></span></span>
+            <span>Quiz and test questions from your objectives, with three options, an answer key and feedback for each option.</span>
+          </div>
+          <div class="pipeline-aside">
+            <span class="aside-tag">evaluation-plan<span class="aside-phase"><span data-fw="addie">Evaluate</span><span data-fw="ubd">Stage 2: evidence</span><span data-fw="sam">After release</span></span></span>
+            <span>Measures of reaction, learning, behavior and results, with the survey items and a schedule.</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="pipeline-foot">The <a href="https://github.com/savvides/idstack/blob/main/docs/frameworks.md" rel="noopener">framework guide</a> has a diagram for each framework and the check that tells you when to leave a phase. It also helps you select a framework. Run the complete workflow with <code>/idstack:pipeline</code>. It tracks course state, skips completed skills, and continues from where you stopped when you run it again.</p>
+    </section>
+
+    <!-- ────────── Evidence ────────── -->
+    <section class="section" id="evidence" aria-labelledby="evidence-title">
+      <header class="section-header">
+        <h2 id="evidence-title">Evidence-based instructional design: the research behind idstack</h2>
+        <p class="lede">The 11 research domains below are ranked by study count. Each bar shows the tier mix of that domain's references. You can see where idstack rests on trials and where it rests on reviews or expert opinion. When findings conflict, the stronger tier wins. All the references are in <a href="https://github.com/savvides/idstack/blob/main/evidence/references.md" rel="noopener"><code>evidence/references.md</code></a>. Every source is public, and you can check every citation.</p>
+      </header>
+
+      <div class="evidence-legend" role="note" aria-label="Evidence tier legend">
+        <span class="evidence-legend-item"><span class="evidence-legend-dot t1" aria-hidden="true"></span><strong>T1</strong>&nbsp;meta-analyses &amp; RCTs</span>
+        <span class="evidence-legend-item"><span class="evidence-legend-dot t2" aria-hidden="true"></span><strong>T2</strong>&nbsp;quasi-experimental with controls</span>
+        <span class="evidence-legend-item"><span class="evidence-legend-dot t3" aria-hidden="true"></span><strong>T3</strong>&nbsp;systematic reviews</span>
+        <span class="evidence-legend-item"><span class="evidence-legend-dot t4" aria-hidden="true"></span><strong>T4</strong>&nbsp;observational</span>
+        <span class="evidence-legend-item"><span class="evidence-legend-dot t5" aria-hidden="true"></span><strong>T5</strong>&nbsp;expert opinion &amp; theory</span>
+      </div>
+
+      <ol class="evidence-index" aria-label="Research domains, ranked by study count">
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Formative Assessment &amp; Feedback</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 71% at T1, 5% at T2, 10% at T3, 5% at T4, 10% at T5" data-tiers="15,1,2,1,2" style="width:100%"><span class="t1" style="width:71.43%"></span><span class="t2" style="width:4.76%"></span><span class="t3" style="width:9.52%"></span><span class="t4" style="width:4.76%"></span><span class="t5" style="width:9.52%"></span></span>
+          <p class="evidence-row-body">Feedback that explains the error and the next step improves retention. Feedback that only marks an answer right or wrong does less. Nicol's principles give criteria for rubrics, self-assessment and peer review. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Cognitive Load Theory &amp; Instructional Sequencing</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 32% at T1, 11% at T2, 0% at T3, 5% at T4, 53% at T5" data-tiers="6,2,0,1,10" style="width:90.48%"><span class="t1" style="width:31.58%"></span><span class="t2" style="width:10.53%"></span><span class="t4" style="width:5.26%"></span><span class="t5" style="width:52.63%"></span></span>
+          <p class="evidence-row-body">Working memory holds only a few new ideas at one time. Cognitive load research shows when a visual cue helps, and when a repeated explanation overloads the learner. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Instructional Design Models &amp; Frameworks</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 18% at T1, 0% at T2, 76% at T3, 0% at T4, 6% at T5" data-tiers="3,0,13,0,1" style="width:80.95%"><span class="t1" style="width:17.65%"></span><span class="t3" style="width:76.47%"></span><span class="t5" style="width:5.88%"></span></span>
+          <p class="evidence-row-body">ADDIE, ARCS, ASSURE and UDL fit different contexts. A 2025 review <span class="cite-pill">[ID-7] [T3]</span> compares the strengths and limits of ADDIE, ARCS, and ASSURE. It proposes a framework that combines them. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Evaluation Models</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 25% at T1, 0% at T2, 31% at T3, 6% at T4, 38% at T5" data-tiers="4,0,5,1,6" style="width:76.19%"><span class="t1" style="width:25%"></span><span class="t3" style="width:31.25%"></span><span class="t4" style="width:6.25%"></span><span class="t5" style="width:37.5%"></span></span>
+          <p class="evidence-row-body">Plan the evaluation while you design the course, not after it. Kirkpatrick's four levels measure reaction, learning, behavior and results. Satisfaction alone does not show learning. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Multimedia Learning Principles</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 56% at T1, 13% at T2, 13% at T3, 6% at T4, 13% at T5" data-tiers="9,2,2,1,2" style="width:76.19%"><span class="t1" style="width:56.25%"></span><span class="t2" style="width:12.5%"></span><span class="t3" style="width:12.5%"></span><span class="t4" style="width:6.25%"></span><span class="t5" style="width:12.5%"></span></span>
+          <p class="evidence-row-body">Mayer's principles (coherence, signaling, segmenting, modality, redundancy) tell how to combine words and pictures. Text or decoration that does not teach adds load and reduces learning. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Online Course Quality Frameworks</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 19% at T1, 0% at T2, 25% at T3, 50% at T4, 6% at T5" data-tiers="3,0,4,8,1" style="width:76.19%"><span class="t1" style="width:18.75%"></span><span class="t3" style="width:25%"></span><span class="t4" style="width:50%"></span><span class="t5" style="width:6.25%"></span></span>
+          <p class="evidence-row-body">Quality Matters (QM) standards and the Community of Inquiry (CoI) model are the most studied frameworks for online course quality. CoI measures teaching, social and cognitive presence. idstack audits against both. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Accessibility &amp; Universal Design for Learning</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 13% at T1, 0% at T2, 53% at T3, 7% at T4, 27% at T5" data-tiers="2,0,8,1,4" style="width:71.43%"><span class="t1" style="width:13.33%"></span><span class="t3" style="width:53.33%"></span><span class="t4" style="width:6.67%"></span><span class="t5" style="width:26.67%"></span></span>
+          <p class="evidence-row-body">WCAG 2.1 AA is the legal baseline for digital accessibility. Universal Design for Learning (UDL 3.0) plans three pathways (engagement, representation, and action) from the start, so that more learners can succeed. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Constructive Alignment &amp; Learning Objectives</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 15% at T1, 0% at T2, 8% at T3, 46% at T4, 31% at T5" data-tiers="2,0,1,6,4" style="width:61.9%"><span class="t1" style="width:15.38%"></span><span class="t3" style="width:7.69%"></span><span class="t4" style="width:46.15%"></span><span class="t5" style="width:30.77%"></span></span>
+          <p class="evidence-row-body">When objectives, activities and assessments do not agree, students learn less. The revised Bloom's taxonomy classifies each objective, so that the assessment can measure the same level. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Learner Analysis &amp; Differentiation</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 50% at T1, 0% at T2, 0% at T3, 33% at T4, 17% at T5" data-tiers="6,0,0,4,2" style="width:57.14%"><span class="t1" style="width:50%"></span><span class="t4" style="width:33.33%"></span><span class="t5" style="width:16.67%"></span></span>
+          <p class="evidence-row-body">Prior knowledge is the strongest predictor of what a learner gains from instruction. Novices need support that slows experienced learners. This is the expertise-reversal effect. <span class="evidence-row-tiers">T1–T5</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Needs Analysis</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 17% at T1, 0% at T2, 83% at T3, 0% at T4, 0% at T5" data-tiers="2,0,10,0,0" style="width:57.14%"><span class="t1" style="width:16.67%"></span><span class="t3" style="width:83.33%"></span></span>
+          <p class="evidence-row-body">A needs analysis examines three levels (organization, task and learner) before anyone writes content. It keeps the course on the skill gap, and it shows when training is not the answer. <span class="evidence-row-tiers">T1–T3</span></p>
+        </li>
+        <li class="evidence-row">
+          <h3 class="evidence-row-title">Rapid Prototyping &amp; Design-Based Research</h3>
+          <span class="tier-mix" role="img" aria-label="Tier mix: 0% at T1, 9% at T2, 36% at T3, 18% at T4, 36% at T5" data-tiers="0,1,4,2,4" style="width:52.38%"><span class="t2" style="width:9.09%"></span><span class="t3" style="width:36.36%"></span><span class="t4" style="width:18.18%"></span><span class="t5" style="width:36.36%"></span></span>
+          <p class="evidence-row-body">A pilot with real learners finds usability and content problems early. Design-based research gives the revisions a method. <span class="evidence-row-tiers">T2–T5</span></p>
+        </li>
+      </ol>
+
+      <p class="evidence-foot">Every recommendation has a research domain code and an evidence tier, for example <code>[Alignment-14] [T1]</code>. The code points to the paper in <code>evidence/references.md</code>.</p>
+    </section>
+
+    <!-- ────────── Output ────────── -->
+    <section class="section" id="output" aria-labelledby="output-title">
+      <header class="section-header">
+        <h2 id="output-title">Each pipeline skill writes a report and a manifest.</h2>
+        <p class="lede">Each skill that produces findings writes two files: a Markdown report for faculty and stakeholders, and a JSON manifest that later skills read.</p>
+      </header>
+
+      <div class="output-pair">
+        <article class="output-panel" aria-label="Sample Markdown report excerpt">
+          <header class="output-header">Markdown · .idstack/exports/&lt;course-slug&gt;/learning-objectives.md</header>
+          <div class="output-body">
+            <h3>
+              Finding align-1
+              <span class="severity severity-warning">warning</span>
+              <span class="tier tier-5">T5</span>
+            </h3>
+            <p><strong>What we saw:</strong> 3 of 8 stated learning objectives have no associated assessment items.</p>
+            <p><strong>Why it matters:</strong> In constructive alignment, each objective has an assessment that measures it, so learners and teachers can see what the course asks for. <span class="cite-pill">[Alignment-1]</span>&nbsp;<span class="tier tier-5">T5</span></p>
+            <p><strong>Recommendation:</strong> idstack recommends that you run <code>/idstack:assessment-design</code> to add aligned assessments, or change the objective list.</p>
+          </div>
+        </article>
+
+        <article class="output-panel" aria-label="Sample JSON manifest excerpt">
+          <header class="output-header">JSON · .idstack/project.json</header>
+<pre class="output-json"><code><span class="punct">{</span>
+  <span class="key">"learning_objectives"</span><span class="punct">:</span> <span class="punct">{</span>
+    <span class="key">"report_path"</span><span class="punct">:</span> <span class="str">".idstack/exports/&lt;course-slug&gt;/learning-objectives.md"</span><span class="punct">,</span>
+    <span class="key">"alignment_matrix"</span><span class="punct">:</span> <span class="punct">{</span>
+      <span class="key">"gaps"</span><span class="punct">:</span> <span class="punct">[</span>
+        <span class="str">"ILO-3 has no matching assessment."</span>
+      <span class="punct">]</span>
+    <span class="punct">}</span>
+  <span class="punct">},</span>
+  <span class="key">"updated"</span><span class="punct">:</span> <span class="str">"2026-05-13T14:32:18Z"</span>
+<span class="punct">}</span></code></pre>
+        </article>
+      </div>
+
+      <p class="output-foot">The report is plain text that you can send to faculty and curriculum committees. The manifest keeps the state of the course for the skills. <code>/idstack:pipeline</code> writes a dashboard with readiness scores, the issues that recur across skills, and a link to each report.</p>
+    </section>
+
+    <!-- ────────── FAQ ────────── -->
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <header class="section-header">
+        <h2 id="faq-title">AI instructional design FAQ</h2>
+      </header>
+
+      <div class="faq-list">
+        <div>
+          <h3>What is an AI instructional design tool?</h3>
+          <p>It is software that uses AI to help you do the work of an instructional designer. idstack has skills that run in Claude Code, and a Chrome extension that audits Canvas, Google Docs and web pages. Each skill does one job, for example a needs analysis, learning objectives, a rubric or a quality review.</p>
+        </div>
+        <div>
+          <h3>Does idstack replace an instructional designer?</h3>
+          <p>No. idstack writes a first draft and finds the research. You make each decision: you approve, change or remove each row.</p>
+        </div>
+        <div>
+          <h3>Which instructional design frameworks does idstack support?</h3>
+          <p>idstack helps you apply ADDIE, backward design or SAM. Each skill does the work of one phase, for example Analyze in ADDIE or Stage 1 in backward design. You can also name the phase, for example "I am in the Design phase", and Claude starts the correct skill.</p>
+        </div>
+        <div>
+          <h3>Where do the recommendations come from?</h3>
+          <p>Each recommendation cites a peer-reviewed study from the idstack reference list. Each citation has an evidence tier, from <span class="tier tier-1">T1</span> (meta-analyses and randomized controlled trials) to <span class="tier tier-5">T5</span> (expert opinion). The full list is in <a href="https://github.com/savvides/idstack/blob/main/evidence/references.md" rel="noopener"><code>evidence/references.md</code></a>, so you can check each citation.</p>
+        </div>
+        <div>
+          <h3>Does idstack work with Canvas, Blackboard and Moodle?</h3>
+          <p>Yes. <code>/idstack:course-import</code> reads a Common Cartridge file from Canvas, Blackboard, Moodle or D2L, and it can connect to Canvas through the Canvas API. <code>/idstack:course-export</code> writes a Common Cartridge file for these four systems or a SCORM package, or it sends the course to Canvas.</p>
+        </div>
+        <div>
+          <h3>Is idstack free, and what do I need to run it?</h3>
+          <p>idstack is free and open source, with the MIT license. The skills need Claude Code and Python 3.9 or later. The Chrome extension needs a free Google AI Studio API key for real audits, and without a key it shows sample findings.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer" role="contentinfo">
+    <div class="footer-top">
+      <div>
+        <p class="footer-brand"><strong>idstack</strong>: Open-source evidence-based instructional design.</p>
+        <p class="footer-tag">CI tests the scripts and the shell steps of the skills. Feedback and contributions are welcome.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/savvides/idstack" rel="noopener">GitHub</a>
+        <a href="https://github.com/savvides/idstack/releases" rel="noopener">Releases</a>
+        <a href="https://github.com/savvides/idstack/blob/main/LICENSE" rel="noopener">MIT License</a>
+        <a href="https://github.com/savvides/idstack/blob/main/PRIVACY.md" rel="noopener">Privacy</a>
+        <a href="https://github.com/savvides/idstack/blob/main/CONTRIBUTING.md" rel="noopener">Contribute</a>
+        <a href="https://github.com/savvides/idstack/blob/main/ROADMAP.md" rel="noopener">Roadmap</a>
+        <a href="https://forms.gle/6LDgDD1M6WWyYvME8" rel="noopener">Feedback</a>
+      </div>
+    </div>
+
+    <form id="signup-form" class="footer-signup" novalidate>
+      <label for="signup-email">Email</label>
+      <input id="signup-email" type="email" name="email" placeholder="your@email.com (release updates only)" required aria-describedby="signup-note">
+      <button type="submit">Subscribe</button>
+    </form>
+    <p class="signup-note" id="signup-note" aria-live="polite"></p>
+  </footer>
+
+  <script>
+    // ─── Copy buttons (one handler, multiple targets) ───────
+    (function () {
+      function flash(btn) {
+        var original = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.setAttribute('data-copied', 'true');
+        setTimeout(function () {
+          btn.textContent = original;
+          btn.removeAttribute('data-copied');
+        }, 1800);
+      }
+      document.querySelectorAll('[data-copy-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.getAttribute('data-copy-target');
+          var el = document.getElementById(id);
+          if (!el) return;
+          var text = el.textContent;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { flash(btn); });
+          } else {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); flash(btn); } catch (e) {}
+            document.body.removeChild(ta);
+          }
+        });
+      });
+    })();
+
+    // ─── Email signup (Formspree, preserved) ────────────────
+    (function () {
+      var form = document.getElementById('signup-form');
+      if (!form) return;
+      var note = document.getElementById('signup-note');
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var btn = form.querySelector('button');
+        var originalLabel = btn.textContent;
+        function fail() {
+          note.textContent = 'Something went wrong. Try again.';
+          note.classList.remove('success');
+          note.classList.add('error');
+        }
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+        fetch('https://formspree.io/f/xkokkzyy', {
+          method: 'POST',
+          body: new FormData(form),
+          headers: { 'Accept': 'application/json' }
+        }).then(function (res) {
+          if (res.ok) {
+            note.textContent = 'You’re in. We’ll keep you posted on releases.';
+            note.classList.remove('error');
+            note.classList.add('success');
+            form.reset();
+          } else { fail(); }
+        }).catch(fail).finally(function () {
+          btn.disabled = false;
+          btn.textContent = originalLabel;
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

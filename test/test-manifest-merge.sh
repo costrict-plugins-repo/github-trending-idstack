@@ -1,0 +1,410 @@
+#!/usr/bin/env bash
+# (see idstack-migrate --init coverage after Test 12 in this file)
+# Unit tests for scripts/idstack-manifest-merge.
+# Run from the repo root, or through smoke-test.sh, which runs it.
+
+set -e
+
+. "$(dirname "$0")/test-helper.sh"
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MERGE="$REPO_ROOT/scripts/idstack-manifest-merge"
+
+# Skip the suite if python3 is missing (the tool requires python3).
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "test-manifest-merge: python3 not available, skipping"
+  exit 0
+fi
+
+if [ ! -x "$MERGE" ]; then
+  echo "test-manifest-merge: $MERGE missing or not executable"
+  exit 1
+fi
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+# Fresh manifest used by each test (rewritten between cases).
+seed_manifest() {
+  cat > "$WORK/project.json" <<'EOF'
+{
+  "version": "1.4",
+  "project_name": "test-project",
+  "created": "2026-01-01T00:00:00Z",
+  "updated": "2026-01-01T00:00:00Z",
+  "context": {"modality": "online"},
+  "needs_analysis": {"existing": "data"},
+  "red_team_audit": {"old": "value"}
+}
+EOF
+}
+
+echo "test-manifest-merge"
+echo ""
+
+# --- Test 1: simple replace ---
+seed_manifest
+echo '{"confidence_score": 75}' > "$WORK/payload.json"
+"$MERGE" --section red_team_audit --payload "$WORK/payload.json" --manifest "$WORK/project.json" --quiet
+check "section replaced" \
+  "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"red_team_audit\"]=={\"confidence_score\": 75}'"
+
+# --- Test 2: foreign sections preserved ---
+check "context preserved" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"context\"]=={\"modality\": \"online\"}'"
+check "needs_analysis preserved" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"needs_analysis\"]=={\"existing\": \"data\"}'"
+
+# --- Test 3: top-level fields preserved (project_name, created) ---
+check "project_name preserved" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"project_name\"]==\"test-project\"'"
+check "created preserved" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"created\"]==\"2026-01-01T00:00:00Z\"'"
+check "version preserved" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"version\"]==\"1.4\"'"
+
+# --- Test 4: updated timestamp bumped (not equal to seeded value) ---
+check "updated timestamp bumped" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"updated\"]!=\"2026-01-01T00:00:00Z\"'"
+
+# --- Test 5: stdin payload ---
+seed_manifest
+echo '{"score": 99}' | "$MERGE" --section quality_review --payload - --manifest "$WORK/project.json" --quiet
+check "stdin payload accepted" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"quality_review\"]=={\"score\": 99}'"
+
+# --- Test 6: unknown section rejected with exit 3 ---
+seed_manifest
+set +e
+"$MERGE" --section bogus_section --payload "$WORK/payload.json" --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "unknown section exits 3" "[ $EC -eq 3 ]"
+
+# --- Test 7: malformed payload rejected with exit 1 ---
+seed_manifest
+echo 'not json' > "$WORK/bad.json"
+set +e
+"$MERGE" --section red_team_audit --payload "$WORK/bad.json" --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "malformed payload exits 1" "[ $EC -eq 1 ]"
+
+# --- Test 8: malformed manifest rejected with exit 2 ---
+echo 'not json' > "$WORK/project.json"
+set +e
+echo '{}' | "$MERGE" --section red_team_audit --payload - --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "malformed manifest exits 2" "[ $EC -eq 2 ]"
+
+# --- Test 9: missing manifest rejected with exit 4 ---
+rm -f "$WORK/project.json"
+set +e
+echo '{}' | "$MERGE" --section red_team_audit --payload - --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "missing manifest exits 4" "[ $EC -eq 4 ]"
+
+# --- Test 10: missing payload file rejected with exit 5 ---
+seed_manifest
+set +e
+"$MERGE" --section red_team_audit --payload "$WORK/nonexistent.json" --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "missing payload file exits 5" "[ $EC -eq 5 ]"
+
+# --- Test 11: manifest with non-dict root (list) rejected with exit 2 ---
+echo '[]' > "$WORK/project.json"
+set +e
+echo '{}' | "$MERGE" --section red_team_audit --payload - --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "manifest with list root exits 2" "[ $EC -eq 2 ]"
+
+# --- Test 12: manifest with non-dict root (string) rejected with exit 2 ---
+echo '"a string"' > "$WORK/project.json"
+set +e
+echo '{}' | "$MERGE" --section red_team_audit --payload - --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "manifest with string root exits 2" "[ $EC -eq 2 ]"
+
+# --- idstack-migrate --init: the manifest bootstrap the merge tool depends on ---
+# Skills pass --create to the merge, which runs idstack-migrate --init when
+# no manifest exists; without --create the merge exits 4 and standalone results are never saved.
+MIGRATE="$(cd "$(dirname "$0")/.." && pwd -P)/scripts/idstack-migrate"
+
+INIT_DIR="$WORK/initcase"
+mkdir -p "$INIT_DIR/.idstack"
+( cd "$INIT_DIR" && "$MIGRATE" --init .idstack/project.json >/dev/null 2>&1 )
+check "--init creates a manifest" "[ -f '$INIT_DIR/.idstack/project.json' ]"
+check "--init manifest is at the latest schema version" \
+  "python3 -c \"import json; assert json.load(open('$INIT_DIR/.idstack/project.json'))['version']=='1.4'\""
+
+# Every section the merge tool accepts must exist in a freshly initialized
+# manifest — otherwise a standalone skill's first merge lands in a document
+# missing the sections downstream skills read.
+check "--init manifest carries every mergeable section" \
+  "python3 -c \"
+import json
+d = json.load(open('$INIT_DIR/.idstack/project.json'))
+ns = {'__name__': 'merge', '__file__': '$MERGE'}
+exec(open('$MERGE').read(), ns)
+allowed = ns['ALLOWED_SECTIONS']
+missing = sorted(s for s in allowed if s not in d)
+assert not missing, 'missing from --init manifest: ' + repr(missing)
+\""
+
+# A merge into a freshly initialized manifest must succeed.
+( cd "$INIT_DIR" && echo '{"overall_score": 77}' | "$MERGE" --section quality_review --payload - --quiet >/dev/null 2>&1 )
+check "merge into an --init manifest succeeds" \
+  "python3 -c \"import json; assert json.load(open('$INIT_DIR/.idstack/project.json'))['quality_review']['overall_score']==77\""
+
+# --init must never clobber an existing manifest.
+( cd "$INIT_DIR" && "$MIGRATE" --init .idstack/project.json >/dev/null 2>&1 )
+check "--init preserves an existing manifest" \
+  "python3 -c \"import json; assert json.load(open('$INIT_DIR/.idstack/project.json'))['quality_review']['overall_score']==77\""
+
+# Without --init the old behavior holds: silent no-op on a missing file.
+NOINIT_DIR="$WORK/noinit"
+mkdir -p "$NOINIT_DIR/.idstack"
+( cd "$NOINIT_DIR" && "$MIGRATE" .idstack/project.json >/dev/null 2>&1 )
+check "plain migrate does not create a manifest" "[ ! -f '$NOINIT_DIR/.idstack/project.json' ]"
+
+# migrate once wrote the manifest in place and turned a failed write into exit 0,
+# which left a cut-off manifest. A 20 KB manifest cannot be written under a
+# 4-block file size limit.
+FAILMIG="$WORK/failmig"
+mkdir -p "$FAILMIG"
+python3 -c "import json, sys; json.dump({'version': '1.3', 'project_name': 'x', 'pad': 'p' * 20000}, open(sys.argv[1], 'w'))" "$FAILMIG/project.json"
+cp "$FAILMIG/project.json" "$FAILMIG/before.json"
+set +e
+MIG_OUT=$( ulimit -f 4; "$MIGRATE" "$FAILMIG/project.json" 2>/dev/null )
+MIG_EC=$?
+set -e
+check "migrate that cannot write exits non-zero, prints nothing and keeps the manifest" \
+  "[ $MIG_EC -ne 0 ] && [ -z \"\$MIG_OUT\" ] && cmp -s '$FAILMIG/project.json' '$FAILMIG/before.json' && [ -z \"\$(ls -A '$FAILMIG' | grep -v -e '^project.json\$' -e '^before.json\$')\" ]"
+
+# migrate once pasted the path into its python source, so a quote broke it.
+QUOTEMIG="$WORK/o'neil course"
+mkdir -p "$QUOTEMIG"
+echo '{"version": "1.3", "project_name": "q"}' > "$QUOTEMIG/project.json"
+chmod 640 "$QUOTEMIG/project.json"
+check "migrate works at a path with a quote and keeps the file mode" \
+  "\"\$MIGRATE\" \"\$QUOTEMIG/project.json\" >/dev/null 2>&1 && python3 -c 'import json, os, sys; p = sys.argv[1]; assert json.load(open(p))[\"version\"] == \"1.4\"; assert os.stat(p).st_mode & 0o777 == 0o640, oct(os.stat(p).st_mode)' \"\$QUOTEMIG/project.json\""
+
+# migrate once replaced a symlinked manifest with a plain file and left the target at the old version.
+LINKMIG="$WORK/linkmig"
+mkdir -p "$LINKMIG/real"
+echo '{"version": "1.0", "project_name": "l"}' > "$LINKMIG/real/project.json"
+ln -s "$LINKMIG/real/project.json" "$LINKMIG/project.json"
+"$MIGRATE" "$LINKMIG/project.json" >/dev/null 2>&1 || true
+check "migrate writes through a symlinked manifest" \
+  "[ -L '$LINKMIG/project.json' ] && python3 -c 'import json, sys; assert json.load(open(sys.argv[1]))[\"version\"] == \"1.4\"' '$LINKMIG/real/project.json'"
+
+# migrate once gave a python traceback when it could not make its tempfile.
+if [ "$(id -u)" -ne 0 ]; then
+  ROMIG="$WORK/romig"
+  mkdir -p "$ROMIG"
+  echo '{"version": "1.3", "project_name": "r"}' > "$ROMIG/project.json"
+  cp "$ROMIG/project.json" "$ROMIG/before.json"
+  chmod 555 "$ROMIG"
+  set +e
+  RO_ERR=$( "$MIGRATE" "$ROMIG/project.json" 2>&1 >/dev/null )
+  RO_EC=$?
+  set -e
+  chmod 755 "$ROMIG"
+  check "migrate in a read-only folder exits 1 with a clear message and keeps the manifest" \
+    "[ $RO_EC -eq 1 ] && printf '%s' \"\$RO_ERR\" | grep -q 'The manifest did not change' && ! printf '%s' \"\$RO_ERR\" | grep -q Traceback && cmp -s '$ROMIG/project.json' '$ROMIG/before.json'"
+fi
+
+echo ""
+
+# --- Test 13: payload with non-dict root (list) rejected with exit 1 ---
+seed_manifest
+echo '[]' > "$WORK/payload.json"
+set +e
+"$MERGE" --section red_team_audit --payload "$WORK/payload.json" --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "payload with list root exits 1" "[ $EC -eq 1 ]"
+
+# --- Test 14: payload with non-dict root (string) rejected with exit 1 ---
+seed_manifest
+echo '"a string"' > "$WORK/payload.json"
+set +e
+"$MERGE" --section red_team_audit --payload "$WORK/payload.json" --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "payload with string root exits 1" "[ $EC -eq 1 ]"
+
+# --- Test 15: --create makes a canonical manifest, then merges into it ---
+rm -f "$WORK/project.json"
+echo '{"overall_score": 81}' | "$MERGE" --create --section quality_review --payload - --manifest "$WORK/project.json" --quiet
+check "--create makes a missing manifest" "[ -f '$WORK/project.json' ]"
+check "--create manifest is canonical and carries the section" \
+  "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"version\"]==\"1.4\" and \"red_team_audit\" in d and d[\"quality_review\"]=={\"overall_score\": 81}'"
+
+# --- Test 16: --create never replaces an existing manifest ---
+seed_manifest
+echo '{}' | "$MERGE" --create --section quality_review --payload - --manifest "$WORK/project.json" --quiet
+check "--create keeps an existing manifest" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"needs_analysis\"]=={\"existing\": \"data\"}'"
+
+# --- Test 17: several sections and --set in one write ---
+seed_manifest
+echo '{"a": 1}' > "$WORK/p1.json"
+echo '{"b": 2}' | "$MERGE" --set project_name="New Name" --section assessments --payload "$WORK/p1.json" \
+  --section learning_objectives --payload - --manifest "$WORK/project.json" --quiet
+check "multi-section write replaces each section" \
+  "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"assessments\"]=={\"a\": 1} and d[\"learning_objectives\"]=={\"b\": 2}'"
+check "--set writes project_name" "python3 -c 'import json; d=json.load(open(\"$WORK/project.json\")); assert d[\"project_name\"]==\"New Name\"'"
+
+# --- Test 18: a bad second payload writes nothing; a bad payload with --create makes no manifest ---
+seed_manifest
+cp "$WORK/project.json" "$WORK/before.json"
+echo 'not json' > "$WORK/bad.json"
+set +e
+"$MERGE" --section assessments --payload "$WORK/p1.json" --section learning_objectives --payload "$WORK/bad.json" \
+  --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+set -e
+check "bad second payload exits 1" "[ $EC -eq 1 ]"
+check "bad second payload leaves the manifest unchanged" "cmp -s '$WORK/project.json' '$WORK/before.json'"
+rm -f "$WORK/project.json"
+set +e
+"$MERGE" --create --section assessments --payload "$WORK/bad.json" --manifest "$WORK/project.json" --quiet 2>/dev/null
+set -e
+check "bad payload with --create makes no manifest" "[ ! -f '$WORK/project.json' ]"
+
+# --- Test 19: --set takes only known keys; pairs must match ---
+seed_manifest
+set +e
+echo '{}' | "$MERGE" --set version=9 --section quality_review --payload - --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC=$?
+"$MERGE" --section assessments --section quality_review --payload "$WORK/p1.json" --manifest "$WORK/project.json" --quiet 2>/dev/null
+EC2=$?
+set -e
+check "--set with an unknown key exits 3" "[ $EC -eq 3 ]"
+check "a --section with no --payload is refused" "[ $EC2 -ne 0 ]"
+
+# --- Test 20: the merge keeps the manifest's file mode (mkstemp makes 0600) ---
+seed_manifest
+chmod 644 "$WORK/project.json"
+echo '{}' | "$MERGE" --section quality_review --payload - --manifest "$WORK/project.json" --quiet
+check "merge keeps the manifest mode 644" \
+  "python3 -c 'import os, sys; m = os.stat(sys.argv[1]).st_mode & 0o777; assert m == 0o644, oct(m)' '$WORK/project.json'"
+
+# --- Test 21: a symlinked manifest stays a link, and its target gets the write (#168) ---
+mkdir -p "$WORK/linkmerge/real"
+seed_manifest
+cp "$WORK/project.json" "$WORK/linkmerge/real/project.json"
+ln -s "$WORK/linkmerge/real/project.json" "$WORK/linkmerge/project.json"
+echo '{"x": 1}' | "$MERGE" --section quality_review --payload - --manifest "$WORK/linkmerge/project.json" --quiet || true
+check "merge writes through a symlinked manifest" \
+  "[ -L '$WORK/linkmerge/project.json' ] && python3 -c 'import json, sys; assert json.load(open(sys.argv[1]))[\"quality_review\"] == {\"x\": 1}' '$WORK/linkmerge/real/project.json'"
+
+# --- Test 22: a read-only folder gives exit 6 and a clear message, not a traceback ---
+if [ "$(id -u)" -ne 0 ]; then
+  mkdir -p "$WORK/romerge"
+  seed_manifest
+  cp "$WORK/project.json" "$WORK/romerge/project.json"
+  chmod 555 "$WORK/romerge"
+  set +e
+  RO_ERR=$(echo '{}' | "$MERGE" --section quality_review --payload - --manifest "$WORK/romerge/project.json" 2>&1 >/dev/null)
+  RO_EC=$?
+  set -e
+  chmod 755 "$WORK/romerge"
+  check "merge in a read-only folder exits 6 with no traceback" \
+    "[ $RO_EC -eq 6 ] && ! printf '%s' \"\$RO_ERR\" | grep -q Traceback && cmp -s '$WORK/romerge/project.json' '$WORK/project.json'"
+fi
+
+# --- Test 23: a manifest from a newer idstack is not written (exit 7) ---
+seed_manifest
+python3 -c 'import json, sys; p = sys.argv[1]; d = json.load(open(p)); d["version"] = "1.10"; json.dump(d, open(p, "w"))' "$WORK/project.json"
+cp "$WORK/project.json" "$WORK/newer-before.json"
+set +e
+NEW_ERR=$(echo '{}' | "$MERGE" --section quality_review --payload - --manifest "$WORK/project.json" 2>&1 >/dev/null)
+NEW_EC=$?
+set -e
+check "merge refuses a manifest from a newer idstack (exit 7, unchanged)" \
+  "[ $NEW_EC -eq 7 ] && printf '%s' \"\$NEW_ERR\" | grep -q 'newer' && cmp -s '$WORK/project.json' '$WORK/newer-before.json'"
+
+# --- Test 24: migrate reports a newer schema and leaves the file unchanged ---
+set +e
+MIG_ERR=$("$REPO_ROOT/scripts/idstack-migrate" "$WORK/project.json" 2>&1 >/dev/null)
+set -e
+check "migrate prints NEWER_SCHEMA for a manifest from a newer idstack" \
+  "printf '%s' \"\$MIG_ERR\" | grep -qx 'NEWER_SCHEMA 1.10' && cmp -s '$WORK/project.json' '$WORK/newer-before.json'"
+
+# --- Test 25: migrate treats a null section as absent instead of crashing ---
+echo '{"version": "1.0", "project_name": "n", "quality_review": null, "import_metadata": null}' > "$WORK/nullmig.json"
+check "migrate fills a null section with its defaults" \
+  "\"$REPO_ROOT/scripts/idstack-migrate\" '$WORK/nullmig.json' >/dev/null 2>&1 && python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); assert d[\"version\"] == \"1.4\" and isinstance(d[\"quality_review\"], dict) and isinstance(d[\"import_metadata\"], dict)' '$WORK/nullmig.json'"
+
+# --- Test 26: migrate --init writes its seed atomically (no stray tempfile, valid JSON) ---
+mkdir -p "$WORK/initmig"
+"$REPO_ROOT/scripts/idstack-migrate" --init "$WORK/initmig/project.json" >/dev/null 2>&1
+check "migrate --init leaves one valid manifest and no tempfile" \
+  "[ \"\$(ls -A '$WORK/initmig')\" = project.json ] && python3 -c 'import json, sys; assert json.load(open(sys.argv[1]))[\"version\"] == \"1.4\"' '$WORK/initmig/project.json'"
+
+# --- Test 27: file mode (#190). A new manifest has the umask mode, and a merge keeps the mode ---
+mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+mkdir -p "$WORK/mode"
+echo '{}' > "$WORK/mode/p.json"
+check "a new manifest has mode 644 under umask 022, and a merge keeps it" \
+  "( umask 022; cd '$WORK/mode' && '$MERGE' --create --section context --payload p.json --quiet && [ \"\$(mode_of .idstack/project.json)\" = 644 ] && '$MERGE' --section context --payload p.json --quiet && [ \"\$(mode_of .idstack/project.json)\" = 644 ] )"
+chmod 640 "$WORK/mode/.idstack/project.json"
+check "a merge keeps mode 640 of an existing manifest" \
+  "( umask 022; cd '$WORK/mode' && '$MERGE' --section context --payload p.json --quiet && [ \"\$(mode_of .idstack/project.json)\" = 640 ] )"
+
+# --- Test 28: the home folder (#178). Merge and migrate --init write nothing there ---
+mkdir -p "$WORK/home"
+set +e
+HOME_ERR=$(cd "$WORK/home" && HOME="$WORK/home" "$MERGE" --create --section context --payload ../mode/p.json 2>&1 >/dev/null)
+HOME_EC=$?
+HOME_MIG_ERR=$(cd "$WORK/home" && HOME="$WORK/home" "$REPO_ROOT/scripts/idstack-migrate" --init 2>&1 >/dev/null)
+HOME_MIG_EC=$?
+set -e
+check "merge in the home folder exits 9 and writes nothing" \
+  "[ $HOME_EC -eq 9 ] && printf '%s' \"\$HOME_ERR\" | grep -q 'home folder' && [ ! -e '$WORK/home/.idstack' ]"
+check "migrate --init in the home folder exits 9 and writes nothing" \
+  "[ $HOME_MIG_EC -eq 9 ] && printf '%s' \"\$HOME_MIG_ERR\" | grep -q 'home folder' && [ ! -e '$WORK/home/.idstack' ]"
+check "a symlink to the home folder is also refused" \
+  "ln -s '$WORK/home' '$WORK/homelink' && cd '$WORK/homelink' && HOME='$WORK/home' '$MERGE' --create --section context --payload ../mode/p.json --quiet; [ \$? -eq 9 ]"
+
+# --- Test 29: the lock (#179). Two writers at the same time lose no update ---
+mkdir -p "$WORK/lock/.idstack"
+(
+  cd "$WORK/lock"
+  echo '{}' | "$MERGE" --create --section context --payload - --quiet
+  ( for i in $(seq 1 40); do echo "{\"n\":$i}" | "$MERGE" --section quality_review --payload - --quiet; done ) &
+  ( for i in $(seq 1 40); do echo "{\"n\":$i}" | "$MERGE" --section red_team_audit --payload - --quiet; done ) &
+  wait
+)
+check "two concurrent merges lose no update" \
+  "python3 -c 'import json; d=json.load(open(\"$WORK/lock/.idstack/project.json\")); assert d[\"quality_review\"][\"n\"]==40 and d[\"red_team_audit\"][\"n\"]==40, d'"
+
+# --- Test 30: --expect-updated (#179). A stale read writes nothing ---
+seed_manifest
+cp "$WORK/project.json" "$WORK/expect-before.json"
+echo '{"x": 1}' > "$WORK/payload.json"
+set +e
+EXP_ERR=$("$MERGE" --section quality_review --payload "$WORK/payload.json" --manifest "$WORK/project.json" --expect-updated "2025-12-31T00:00:00Z" 2>&1 >/dev/null)
+EXP_EC=$?
+set -e
+check "a stale --expect-updated exits 8 and leaves the manifest unchanged" \
+  "[ $EXP_EC -eq 8 ] && printf '%s' \"\$EXP_ERR\" | grep -q 'changed after you read' && cmp -s '$WORK/project.json' '$WORK/expect-before.json'"
+check "a matching --expect-updated writes" \
+  "'$MERGE' --section quality_review --payload '$WORK/payload.json' --manifest '$WORK/project.json' --expect-updated 2026-01-01T00:00:00Z --quiet && python3 -c 'import json; assert json.load(open(\"$WORK/project.json\"))[\"quality_review\"]=={\"x\": 1}'"
+check "a second merge with the first read time is stale" \
+  "'$MERGE' --section quality_review --payload '$WORK/payload.json' --manifest '$WORK/project.json' --expect-updated 2026-01-01T00:00:00Z --quiet" 8
+
+# The lock file must be git-ignored, once, even when .gitignore lacks a final newline.
+GI="$WORK/gi"; mkdir -p "$GI"; seed_manifest; cp "$WORK/project.json" "$GI/project.json"; printf 'canvas.env' > "$GI/.gitignore"
+echo '{"x": 1}' > "$WORK/payload.json"
+"$MERGE" --section quality_review --payload "$WORK/payload.json" --manifest "$GI/project.json" --quiet
+"$MERGE" --section quality_review --payload "$WORK/payload.json" --manifest "$GI/project.json" --quiet
+check "the merge git-ignores .manifest.lock once and keeps old lines" \
+  "[ \$(grep -cx '.manifest.lock' '$GI/.gitignore') -eq 1 ] && grep -qx 'canvas.env' '$GI/.gitignore'"
+GW="$WORK/gw"; mkdir -p "$GW/.gitignore"; cp "$WORK/project.json" "$GW/project.json"
+GW_ERR=$("$MERGE" --section quality_review --payload "$WORK/payload.json" --manifest "$GW/project.json" --quiet 2>&1 >/dev/null)
+check "a .gitignore that cannot be written warns on stderr and the merge still writes" \
+  "printf '%s' \"\$GW_ERR\" | grep -q 'gitignore' && python3 -c 'import json; assert json.load(open(\"$GW/project.json\"))[\"quality_review\"]=={\"x\": 1}'"
+
+echo ""
+echo "manifest-merge: $PASS/$TOTAL passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] && exit 0 || exit 1
